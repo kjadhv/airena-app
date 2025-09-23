@@ -1,11 +1,13 @@
+// REMOVED: forwardRef and AppModule are no longer needed here
 import { Module, InternalServerErrorException } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as admin from 'firebase-admin';
 import { StreamService } from './stream.service';
 import { StreamController } from './stream.controller';
 import { MetricsModule } from '../metrics/metric.module';
+import { NmsService } from '../nms/nms.service'; // ADDED: Import NmsService
 
-// --- Provider #1: Initializes the Firebase App ---
+// --- NOTE: No changes to the firebase providers ---
 const firebaseProvider = {
   provide: 'FIREBASE_APP',
   useFactory: (configService: ConfigService) => {
@@ -25,21 +27,19 @@ const firebaseProvider = {
   inject: [ConfigService],
 };
 
-// --- Provider #2: Provides Firestore, depends on the Firebase App ---
 const firestoreProvider = {
   provide: 'FIRESTORE',
   useFactory: (app: admin.app.App) => app.firestore(),
-  inject: ['FIREBASE_APP'], // Explicitly depend on the initialized app
+  inject: ['FIREBASE_APP'],
 };
 
-// --- Provider #3: Provides Storage, depends on the Firebase App ---
 const storageProvider = {
   provide: 'STORAGE_BUCKET',
   useFactory: (app: admin.app.App, configService: ConfigService) => {
     const bucketName = `${configService.get<string>('FIREBASE_PROJECT_ID')}.appspot.com`;
     return app.storage().bucket(bucketName);
   },
-  inject: ['FIREBASE_APP', ConfigService], // Explicitly depend on the initialized app
+  inject: ['FIREBASE_APP', ConfigService],
 };
 
 @Module({
@@ -49,8 +49,10 @@ const storageProvider = {
     firestoreProvider,
     storageProvider,
     StreamService,
+    NmsService, // FIX: NmsService now lives inside the StreamModule
   ],
   controllers: [StreamController],
-  exports: [StreamService], // 👈 This line makes the StreamService available to other modules
+  // FIX: Export both services so other modules (like AppModule for HlsController) can use them.
+  exports: [StreamService, NmsService],
 })
 export class StreamModule {}

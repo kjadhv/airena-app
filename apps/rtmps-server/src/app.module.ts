@@ -1,12 +1,12 @@
-// in apps/rtmps-server/src/app.module.ts
-
+import { HlsController } from './hls/hls.controller';
+// REMOVED: forwardRef as it's no longer needed here
 import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { StreamController } from './stream/stream.controller';
 import { FirebaseAuthMiddleware } from './firebase-auth.middleware';
 import { MetricsModule } from './metrics/metric.module';
 import { StreamModule } from './stream/stream.module';
-import { NmsService } from './nms/nms.service';
+// REMOVED: NmsService is no longer provided here
 
 @Module({
   imports: [
@@ -14,11 +14,14 @@ import { NmsService } from './nms/nms.service';
       isGlobal: true,
       envFilePath: '../.env.local',
     }),
+    // FIX: Just import StreamModule directly now.
     StreamModule,
     MetricsModule,
   ],
-  providers: [NmsService],
-  exports: [NmsService],
+  controllers: [HlsController],
+  // FIX: NmsService has been moved to StreamModule.
+  providers: [],
+  exports: [],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
