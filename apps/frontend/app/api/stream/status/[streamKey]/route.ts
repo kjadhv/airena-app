@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(
   request: NextRequest,
-  context: { params: { streamKey: string } } // <-- Corrected function signature
+  { params }: { params: { streamKey: string } } // <-- Correct destructuring
 ) {
-  const { streamKey } = context.params; // Get the streamKey from the context
+  const { streamKey } = params; // Get the streamKey from params
   const backendApiUrl = process.env.NESTJS_BACKEND_URL;
 
   if (!backendApiUrl) {
@@ -27,8 +27,17 @@ export async function GET(
       cache: 'no-store',
     });
 
+    if (!backendResponse.ok) {
+      const errorText = await backendResponse.text();
+      console.error('Backend response error:', backendResponse.status, errorText);
+      return NextResponse.json(
+        { message: 'Failed to fetch stream status from backend' },
+        { status: backendResponse.status }
+      );
+    }
+
     const responseData = await backendResponse.json();
-    return NextResponse.json(responseData, { status: backendResponse.status });
+    return NextResponse.json(responseData, { status: 200 });
 
   } catch (error) {
     console.error('Error proxying stream status request:', error);
