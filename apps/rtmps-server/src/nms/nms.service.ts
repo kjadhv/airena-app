@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import NodeMediaServer from 'node-media-server';
-import { MetricService } from '../metrics/metric.service';
-import { spawn } from 'child_process';
+import { ConfigService } from '@nestjs/config';
+import { StreamService } from '../stream/stream.service';
 import * as fs from 'fs';
 
 @Injectable()
@@ -10,28 +10,16 @@ export class NmsService implements OnModuleInit {
   private readonly logger = new Logger(NmsService.name);
 
   constructor(
-    private readonly metricService: MetricService,
+    private readonly configService: ConfigService,
+    private readonly streamService: StreamService,
   ) {}
 
   onModuleInit() {
-    const isWindows = process.platform === 'win32';
-
-    // Hardcoded FFmpeg binary path (update according to your actual locations)
-    let ffmpegPath = isWindows
-      ? 'C:/ffmpeg/bin/ffmpeg.exe' // Windows path
-      : '/usr/bin/ffmpeg';         // Linux path
-
-    // Normalize path slashes for Windows
-    if (isWindows && ffmpegPath.includes('\\')) {
-      ffmpegPath = ffmpegPath.replace(/\\/g, '/');
-    }
-
-    if (!fs.existsSync(ffmpegPath)) {
-      this.logger.error(`❌ FFmpeg binary not found at: ${ffmpegPath}`);
+    const ffmpegPath = this.configService.get<string>('FFMPEG_PATH');
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+      this.logger.error(`❌ FFmpeg binary not found at path specified in .env: ${ffmpegPath}`);
       process.exit(1);
     }
-
-    const mediaRoot = './media';
 
     const config = {
       rtmp: {
@@ -42,8 +30,8 @@ export class NmsService implements OnModuleInit {
         ping_timeout: 60,
       },
       http: {
-        mediaroot: mediaRoot,
         port: 8000,
+        mediaroot: './media',
         allow_origin: '*',
       },
       trans: {
@@ -52,150 +40,51 @@ export class NmsService implements OnModuleInit {
           {
             app: 'live',
             hls: true,
-            hlsFlags: '[hls_time=10:hls_list_size=6:hls_flags=delete_segments]',
-            dash: false,
+            hlsFlags: '[hls_time=10:hls_list_size=3:hls_flags=delete_segments]',
+            dash: true,
           },
         ],
+      },
+      auth: {
+        api: true,
+        api_user: 'admin', // Should be from .env
+        api_pass: 'admin', // Should be from .env
       },
     };
 
     this.nms = new NodeMediaServer(config);
-    this.setupStreamEvents(ffmpegPath);
+    this.setupStreamEvents();
     this.nms.run();
   }
 
-  private setupStreamEvents(ffmpegPath: string) {
-    this.nms.on('postPublish', async (id, streamPath) => {
-      const streamKey = streamPath.split('/').pop() || 'defaultStreamKey';
-      this.logger.log(`[NodeEvent] Stream started for ${streamKey}`);
+  private setupStreamEvents() {
+    this.nms.on('prePublish', async (id, StreamPath, args) => {
+      const streamKey = StreamPath.split('/').pop();
+      const session = this.nms.getSession(id);
 
-      // const vodOutputPath = this.vodService.generateVodPath(streamKey);
-
-      try {
-        const ffmpeg = spawn(ffmpegPath, [
-          '-i', `rtmp://127.0.0.1/live/${streamKey}`,
-          '-c:v', 'copy',
-          '-c:a', 'aac',
-          '-y',
-          
-        ]);
-
-        ffmpeg.stderr.on('data', (data: Buffer) => {
-          this.logger.verbose(`[FFmpeg VOD Stderr][${streamKey}] ${data.toString().trim()}`);
-        });
-
-        ffmpeg.on('error', (err) => {
-          this.logger.error(`[FFmpeg VOD Error][${streamKey}] ${err.message}`, err.stack);
-        });
-
-        ffmpeg.on('close', (code) => {
-          if (code !== 0) {
-            this.logger.error(`[FFmpeg VOD Error][${streamKey}] exited with code: ${code}`);
-          } else {
-            this.logger.log(`[FFmpeg VOD][${streamKey}] completed successfully.`);
-          }
-          this.metricService.resetMetrics(streamKey);
-        });
-      } catch (error: unknown) {
-        this.logUnknownError(`[FFmpeg VOD Error][${streamKey}]`, error);
+      if (!streamKey) {
+        this.logger.warn(`[AUTH] REJECTED stream with invalid path: ${StreamPath}`);
+        return (session as any).reject();
       }
 
-      // === Metrics ===
-      let lastTotalSize = 0;
-      let lastTimestamp = Date.now();
-      let lastTime = Date.now();
-      let dataChunksProcessed = 0;
+      this.logger.log(`[AUTH] Attempting to publish stream with key: ${streamKey}`);
+      const stream = await this.streamService.getStreamByKey(streamKey);
 
-      try {
-        const metricsFfmpeg = spawn(ffmpegPath, [
-          '-i', `rtmp://127.0.0.1/live/${streamKey}`,
-          '-f', 'null',
-          '-',
-          '-stats',
-          '-progress', 'pipe:1',
-        ]);
-
-        metricsFfmpeg.on('error', (err) => {
-          this.logger.error(`[FFmpeg Metrics Error][${streamKey}] ${err.message}`, err.stack);
-        });
-
-        metricsFfmpeg.stdout.on('data', (data: Buffer) => {
-          const lines = data.toString().split('\n');
-          let totalSize = lastTotalSize;
-
-          for (const line of lines) {
-            const [key, valueRaw] = line.trim().split('=');
-            const value = valueRaw ?? '0';
-            if (key === 'total_size') totalSize = parseInt(value, 10);
-          }
-
-          const now = Date.now();
-          const deltaBytes = totalSize - lastTotalSize;
-          const durationSec = (now - lastTimestamp) / 1000;
-          dataChunksProcessed++;
-
-          if (durationSec <= 0) {
-            this.logger.verbose(`[FFmpeg Metrics][${streamKey}] Skipping short interval.`);
-            lastTimestamp = now;
-            return;
-          }
-
-          const bitrate = (deltaBytes * 8) / 1024 / durationSec;
-          const latency = now - lastTime;
-          const bandwidth = bitrate * 1.2;
-
-          lastTotalSize = totalSize;
-          lastTimestamp = now;
-          lastTime = now;
-
-          if (dataChunksProcessed < 3) {
-            this.logger.verbose(`[FFmpeg Metrics][${streamKey}] Stabilizing...`);
-            return;
-          }
-
-          this.metricService.updateMetrics(streamKey, {
-            bitrate: Math.round(bitrate),
-            latency,
-            bandwidth: Number(bandwidth.toFixed(2)),
-          });
-        });
-
-        metricsFfmpeg.stderr.on('data', (data: Buffer) => {
-          this.logger.warn(`[FFmpeg Metrics Stderr][${streamKey}] ${data.toString().trim()}`);
-        });
-
-        metricsFfmpeg.on('close', (code) => {
-          if (code !== 0) {
-            this.logger.error(`[FFmpeg Metrics Error][${streamKey}] exited with code: ${code}`);
-          } else {
-            this.logger.log(`[FFmpeg Metrics][${streamKey}] completed.`);
-          }
-        });
-      } catch (error: unknown) {
-        this.logUnknownError(`[FFmpeg Metrics Error][${streamKey}]`, error);
-      }
-    });
-
-    this.nms.on('donePublish', (id, streamPath) => {
-      const streamKey = streamPath.split('/').pop() || 'defaultStreamKey';
-      this.logger.log(`[NodeEvent][${streamKey}] Stream publishing finished.`);
-    });
-
-    this.nms.on('error', (err: unknown) => {
-      const message = `[NodeMediaServer Global Error]`;
-      if (err instanceof Error) {
-        this.logger.error(`${message}: ${err.message}`, err.stack);
+      if (!stream) {
+        this.logger.warn(`[AUTH] REJECTED stream key: ${streamKey}. Key not found.`);
+        (session as any).reject();
       } else {
-        this.logger.error(`${message}: ${String(err)}`);
+        this.logger.log(`[AUTH] ACCEPTED stream key: ${streamKey}.`);
+        await this.streamService.updateStreamStatus(streamKey, true);
       }
     });
-  }
 
-  private logUnknownError(prefix: string, error: unknown) {
-    if (error instanceof Error) {
-      this.logger.error(`${prefix}: ${error.message}`, error.stack);
-    } else {
-      this.logger.error(`${prefix}: ${String(error)}`);
-    }
+    this.nms.on('donePublish', async (id, StreamPath, args) => {
+      const streamKey = StreamPath.split('/').pop();
+      if (streamKey) {
+        this.logger.log(`[NMS] Stream ended: ${streamKey}`);
+        await this.streamService.updateStreamStatus(streamKey, false);
+      }
+    });
   }
 }

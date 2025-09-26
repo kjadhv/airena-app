@@ -1,22 +1,25 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
 import { User } from './user.entity';
 
-@Entity()
+@Entity('Stream')
 export class Stream {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  user!: User;
-
-  @Column()
+  @Column({ unique: true })
   streamKey!: string;
 
   @Column()
   streamUrl!: string;
 
+  @Column()
+  userId!: string;
+
+  @ManyToOne(() => User, (user) => user.streams)
+  user!: User;
+
   @Column({ default: false })
-  isLive!: boolean;
+  isActive!: boolean;
 
   @Column({ nullable: true })
   title!: string;
@@ -24,14 +27,8 @@ export class Stream {
   @Column({ nullable: true })
   description!: string;
 
-  @Column({ nullable: true })
-  thumbnailUrl!: string;
-
-  @Column({ nullable: true })
-  startedAt!: Date;
-
-  @Column({ nullable: true })
-  endedAt!: Date;
+  @Column({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  lastActiveAt!: Date;
 
   @CreateDateColumn()
   createdAt!: Date;

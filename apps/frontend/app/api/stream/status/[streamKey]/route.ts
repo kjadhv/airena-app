@@ -1,53 +1,50 @@
-// File: app/api/stream/status/[streamKey]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-// This API route acts as a proxy to the real RTMP server's status endpoint.
-// This is crucial to prevent leaking the RTMP server's direct address to the client
-// and to handle the race condition where a stream is marked "live" in the DB
-// before the HLS files are actually available.
-
+/**
+ * Handles GET requests to fetch the status of a specific stream by proxying
+ * the request to the NestJS backend.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: { streamKey: string } }
 ) {
+  // 1. Get the streamKey from the dynamic URL parameter
+  const { streamKey } = params;
+  if (!streamKey) {
+    return NextResponse.json({ message: 'Stream key is required' }, { status: 400 });
+  }
+
+  // 2. Use the correct server-side environment variable for the backend URL
+  const backendApiUrl = process.env.NESTJS_BACKEND_URL;
+  if (!backendApiUrl) {
+    console.error("NESTJS_BACKEND_URL environment variable is not set.");
+    return NextResponse.json(
+      { message: 'Server configuration error' },
+      { status: 500 }
+    );
+  }
+
   try {
-    const { streamKey } = params;
-    const rtmpServerBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    // 3. Construct the full URL to the NestJS backend's status endpoint
+    const statusUrl = `${backendApiUrl}/stream/status/${streamKey}`;
 
-    if (!streamKey) {
-      return NextResponse.json({ error: 'Stream key is required' }, { status: 400 });
-    }
-
-    if (!rtmpServerBaseUrl) {
-      console.error('NEXT_PUBLIC_API_BASE_URL is not set in the environment.');
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
-
-    // Construct the full URL to the rtmp-server's status endpoint
-    const statusUrl = `${rtmpServerBaseUrl}/stream/status/${streamKey}`;
-
-    // Fetch the status from the rtmp-server
-    const response = await fetch(statusUrl, {
-      // Use a short timeout and revalidate frequently to get the latest status quickly
-      next: { revalidate: 1 } 
+    // 4. Fetch the status from the backend
+    const backendResponse = await fetch(statusUrl, {
+      method: 'GET',
+      // Always fetch the latest status, do not cache
+      cache: 'no-store', 
     });
 
-    // If the rtmp-server returned an error (e.g., 404), proxy that response
-    if (!response.ok) {
-      const errorData = await response.json();
-      return NextResponse.json(errorData, { status: response.status });
-    }
-
-    // If the request was successful, proxy the data
-    const data = await response.json();
-
-    // The data from the rtmp-server should be in the format { isLive, hlsUrl, ... }
-    // We just pass it through.
-    return NextResponse.json(data);
+    // 5. Proxy the backend's response (both success and error) back to the client
+    const responseData = await backendResponse.json();
+    return NextResponse.json(responseData, { status: backendResponse.status });
 
   } catch (error) {
     console.error('Error proxying stream status request:', error);
-    // This catches network errors between this proxy and the rtmp-server
-    return NextResponse.json({ error: 'Internal server error while fetching stream status' }, { status: 500 });
+    // This catches network errors between this proxy and the NestJS backend
+    return NextResponse.json(
+      { message: 'An internal server error occurred while fetching stream status' },
+      { status: 500 }
+    );
   }
 }

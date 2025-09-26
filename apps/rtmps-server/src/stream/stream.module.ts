@@ -1,19 +1,19 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { StreamService } from './stream.service';
+import { ConfigModule } from '@nestjs/config';
 import { StreamController } from './stream.controller';
-import { MetricService } from '../metrics/metric.service';
-import { MetricController } from '../metrics/metric.controller';
-import { User } from './user.entity';
-import { Stream } from './stream.entity'; // Import Stream entity
-import { MetricsModule } from '../metrics/metric.module';  // Import MetricsModule
+import { StreamService } from './stream.service';
+import { Stream } from './stream.entity';
+import { User } from './user.entity'; // <-- Import User entity
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ Stream, User]),
-    MetricsModule,  // Add MetricsModule to resolve MetricGateway dependency
+    ConfigModule,
+    // MODIFIED: Include User in forFeature
+    TypeOrmModule.forFeature([Stream, User]) 
   ],
-  providers: [StreamService, MetricService],
-  controllers: [StreamController, MetricController],
+  controllers: [StreamController],
+  providers: [StreamService],
+  exports: [StreamService]
 })
 export class StreamModule {}

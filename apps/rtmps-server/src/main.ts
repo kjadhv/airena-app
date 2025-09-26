@@ -1,45 +1,19 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
-
-import { NmsService } from './nms/nms.service'; // Import NmsService
-import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create(AppModule);
 
-  // Register Firebase Auth middleware
-  // Note: For class-based middleware to be truly global in typical NestJS,
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    // This ensures that the middleware is instantiated correctly for each request
-    // if it has dependencies or needs to be a class instance.
-    // If FirebaseAuthMiddleware is simple and doesn't rely on DI for its own dependencies,
-    // new FirebaseAuthMiddleware().use(req, res, next) would also work.
-    // However, if FirebaseAuthMiddleware were to be @Injectable() and have its own
-    // dependencies injected by Nest, this approach of manual instantiation here
-    // would not work for those dependencies. A functional middleware or module-based
-    // registration would be better. For now, assuming FirebaseAuthMiddleware is self-contained.
-    // const firebaseAuthMiddleware = new FirebaseAuthMiddleware();
-    // firebaseAuthMiddleware.use(req, res, next);
-  });
-
-  // Enable CORS for frontend-backend communication
+  // Use environment variable for CORS origin
   app.enableCors({
-    origin: '*', // your frontend URL
+    origin: process.env.FRONTEND_URL || '*',
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Serve static assets (optional)
-  app.useStaticAssets(join(__dirname, '..', 'public'));
+  // The NmsService will now start automatically via onModuleInit.
 
-  // Inject NmsService and start the NodeMediaServer
-  const nmsService = app.get(NmsService);
-  nmsService.onModuleInit(); // This will start NMS
-
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(3000); // NestJS API server port
   console.log(`Application is running on: ${await app.getUrl()}`);
+  console.log('Node Media Server is running on RTMP port 1935 and HTTP port 8000');
 }
 bootstrap();

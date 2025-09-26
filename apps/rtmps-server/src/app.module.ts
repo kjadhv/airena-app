@@ -1,32 +1,30 @@
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
-
-import { Stream } from './stream/stream.entity';
-import { User } from './stream/user.entity';
-
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NmsService } from './nms/nms.service';
-import { StreamService } from './stream/stream.service';
-
 import { MetricsModule } from './metrics/metric.module';
 import { StreamModule } from './stream/stream.module';
-
-
+import { User } from './stream/user.entity';
+import { Stream } from './stream/stream.entity';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    StreamModule,
-    MetricsModule,
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: 'src/data/streaming.db',
-      entities: [Stream, User],
-      synchronize: true,
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    // Database configuration is now loaded async from env variables
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'sqlite',
+        database: configService.get<string>('DATABASE_PATH', 'data/streaming.db'),
+        entities: [Stream, User],
+        synchronize: configService.get<string>('NODE_ENV') !== 'production', // Use synchronize only in dev
+      }),
     }),
-    TypeOrmModule.forFeature([Stream, User]),
+    StreamModule, // This module provides StreamService
+    MetricsModule,
   ],
-  providers: [NmsService, StreamService],
+  providers: [NmsService],
   exports: [NmsService],
 })
 export class AppModule {}

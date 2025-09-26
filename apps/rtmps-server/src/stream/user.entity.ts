@@ -1,24 +1,31 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Stream } from './stream.entity';
 
-@Entity()
+@Entity('users')
 export class User {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
 
   @Column({ unique: true })
-  firebaseId!: string;
+  email!: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  streamKey!: string;
+  @Column()
+  displayName!: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  streamUrl!: string;
+  @Column({ nullable: true })
+  photoURL!: string;
 
   @Column({ default: false })
-  isStreaming!: boolean;
+  isCreator!: boolean;
 
-  @Column({ type: 'text', nullable: true })
-  streamSettings!: string; // stored as JSON string
+  @Column({ default: false })
+  isAdmin!: boolean;
+
+  @Column({ nullable: true })
+  firebaseUid!: string;
+
+  @OneToMany(() => Stream, (stream) => stream.user)
+  streams!: Stream[];
 
   @CreateDateColumn()
   createdAt!: Date;

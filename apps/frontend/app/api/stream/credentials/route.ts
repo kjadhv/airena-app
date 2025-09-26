@@ -1,40 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-
-export async function GET(request: NextRequest) {
-  const authorization = request.headers.get('Authorization');
-
+export async function POST(request: NextRequest) {
+  const authorization = request.headers.get("Authorization");
   if (!authorization) {
-    return NextResponse.json({ error: 'Authorization header is missing' }, { status: 401 });
+    return NextResponse.json(
+      { message: "Authorization header is required" },
+      { status: 401 }
+    );
   }
 
-  const backendUrl = `${process.env.NESTJS_BACKEND_URL}/stream/credentials`;
-
-  if (!process.env.NESTJS_BACKEND_URL) {
-    console.error("NESTJS_BACKEND_URL is not set in the environment variables.");
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  const backendApiUrl = process.env.NESTJS_BACKEND_URL;
+  if (!backendApiUrl) {
+    console.error("NESTJS_BACKEND_URL environment variable is not set.");
+    return NextResponse.json(
+      { message: "Server configuration error" },
+      { status: 500 }
+    );
   }
 
   try {
-    const backendResponse = await fetch(backendUrl, {
-      method: 'GET',
+    // THIS IS THE LINE TO FIX
+    const backendResponse = await fetch(`${backendApiUrl}/stream/credentials`, {
+      method: "POST",
       headers: {
-        'Authorization': authorization,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        Authorization: authorization,
       },
-      cache: 'no-store',
+      body: JSON.stringify(await request.json()),
+      cache: "no-store",
     });
 
-    const data = await backendResponse.json();
-
-    if (!backendResponse.ok) {
-      return NextResponse.json(data, { status: backendResponse.status });
-    }
-
-    return NextResponse.json(data);
+    const responseData = await backendResponse.json();
+    return NextResponse.json(responseData, { status: backendResponse.status });
 
   } catch (error) {
-    console.error('Proxy API route error:', error);
-    return NextResponse.json({ error: 'An internal server error occurred.' }, { status: 500 });
+    console.error("Error proxying request to backend:", error);
+    return NextResponse.json(
+      { message: "An internal server error occurred." },
+      { status: 500 }
+    );
   }
 }

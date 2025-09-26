@@ -1,107 +1,68 @@
 import {
   Controller,
-  Get,
+  Get, // Import Get
   Post,
   Body,
-  Req,
-  Param,
-  UnauthorizedException,
+  Param, // Import Param
+  Logger,
+  BadRequestException,
+  NotFoundException, // Import NotFoundException
 } from '@nestjs/common';
-import { Request } from 'express';
-import { StreamService } from './stream.service';
-import { MetricService } from '../metrics/metric.service';
+import { StreamService, StreamCredentials } from './stream.service';
 
-// Extend Request to include Firebase UID
-interface FirebaseRequest extends Request {
-  user?: {
-    uid: string;
-    email?: string;
-  };
+// Interface for the expected user data from the frontend
+interface UserDto {
+  userId: string;
+  email: string;
+  displayName: string;
 }
 
 @Controller('stream')
 export class StreamController {
-  constructor(
-    private readonly streamService: StreamService,
-    private readonly metricService: MetricService,
-  ) {}
+  private readonly logger = new Logger(StreamController.name);
 
-  @Get('credentials')
-  async getStreamCredentials(@Req() req: FirebaseRequest) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.getOrCreateStreamKey(firebaseId);
+  constructor(private readonly streamService: StreamService) {}
+
+  @Post('credentials')
+  async getStreamCredentials(
+    @Body() userDto: UserDto,
+  ): Promise<StreamCredentials> {
+    this.logger.log(`📺 POST /stream/credentials for user: ${userDto.userId}`);
+    if (!userDto.userId) {
+      throw new BadRequestException('userId in request body is required');
+    }
+    return this.streamService.getStreamCredentials(userDto);
   }
 
   @Post('regenerate-key')
-  async regenerateStreamKey(@Req() req: FirebaseRequest) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.regenerateStreamKey(firebaseId);
+  async regenerateStreamKey(
+    @Body('userId') userId: string,
+  ): Promise<StreamCredentials> {
+    this.logger.log(`🔄 POST /stream/regenerate-key for user: ${userId}`);
+    if (!userId) {
+      throw new BadRequestException('userId in request body is required');
+    }
+    return this.streamService.regenerateStreamKey(userId);
   }
 
-  @Post('start/:streamKey')
-  async startStream(@Req() req: FirebaseRequest, @Param('streamKey') streamKey: string) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.startStream(firebaseId, streamKey);
-  }
-
-  @Post('stop/:streamKey')
-  async stopStream(@Req() req: FirebaseRequest, @Param('streamKey') streamKey: string) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.stopStream(firebaseId, streamKey);
-  }
-
-  @Get('list')
-  async listUserStreams(@Req() req: FirebaseRequest) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.listUserStreams(firebaseId);
-  }
-
-  @Get(':streamKey')
-  async getStreamDetails(@Req() req: FirebaseRequest, @Param('streamKey') streamKey: string) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.getStreamDetails(firebaseId, streamKey);
-  }
-
+  // ADDED BACK: The missing endpoint for checking stream status
   @Get('status/:streamKey')
   async getStreamStatus(@Param('streamKey') streamKey: string) {
-    const metrics = await this.metricService.getMetrics(streamKey);
-    return {
-      isLive: (metrics?.bitrate ?? 0) > 0,
-      bitrate: metrics?.bitrate ?? 0,
-      latency: metrics?.latency ?? 0,
-      bandwidth: metrics?.bandwidth ?? 0,
-    };
-  }
+    this.logger.log(`📊 GET /stream/status/${streamKey} requested`);
+    
+    const stream = await this.streamService.getStreamByKey(streamKey);
+    
+    if (!stream) {
+      throw new NotFoundException(`Stream with key ${streamKey} not found`);
+    }
 
-  @Get('metrics/:streamKey')
-  async getStreamMetrics(@Param('streamKey') streamKey: string) {
-    const metrics = await this.metricService.getMetrics(streamKey);
+    // Return the data the frontend expects
     return {
-      bitrate: metrics?.bitrate ?? 0,
-      latency: metrics?.latency ?? 0,
-      bandwidth: metrics?.bandwidth ?? 0,
+      streamKey: stream.streamKey,
+      isActive: stream.isActive,
+      lastActiveAt: stream.lastActiveAt,
+      title: stream.title,
+      createdAt: stream.createdAt
     };
-  }
-
-  @Post('settings/:streamKey')
-  async updateStreamSettings(
-    @Req() req: FirebaseRequest,
-    @Param('streamKey') streamKey: string,
-    @Body()
-    settings: {
-      quality?: string;
-      maxBitrate?: number;
-      resolution?: string;
-    },
-  ) {
-    const firebaseId = req.user?.uid;
-    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.updateStreamSettings(firebaseId, streamKey, settings);
   }
 }
