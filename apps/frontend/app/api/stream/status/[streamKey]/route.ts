@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { streamKey: string } } // <-- Correct destructuring
+  context: { params: Promise<{ streamKey: string }> } // <-- Updated for Next.js 15+
 ) {
-  const { streamKey } = params; // Get the streamKey from params
+  const { streamKey } = await context.params; // Await the params Promise
   const backendApiUrl = process.env.NESTJS_BACKEND_URL;
 
   if (!backendApiUrl) {
