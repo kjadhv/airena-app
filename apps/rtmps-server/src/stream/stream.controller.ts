@@ -1,16 +1,15 @@
 import {
   Controller,
-  Get, // Import Get
+  Get,
   Post,
   Body,
-  Param, // Import Param
+  Param,
   Logger,
   BadRequestException,
-  NotFoundException, // Import NotFoundException
+  NotFoundException,
 } from '@nestjs/common';
 import { StreamService, StreamCredentials } from './stream.service';
 
-// Interface for the expected user data from the frontend
 interface UserDto {
   userId: string;
   email: string;
@@ -45,7 +44,7 @@ export class StreamController {
     return this.streamService.regenerateStreamKey(userId);
   }
 
-  // ADDED BACK: The missing endpoint for checking stream status
+  // THIS IS THE CORRECTED METHOD
   @Get('status/:streamKey')
   async getStreamStatus(@Param('streamKey') streamKey: string) {
     this.logger.log(`📊 GET /stream/status/${streamKey} requested`);
@@ -56,13 +55,12 @@ export class StreamController {
       throw new NotFoundException(`Stream with key ${streamKey} not found`);
     }
 
-    // Return the data the frontend expects
+    // By creating a new, plain object like this, we avoid the circular reference
+    // and only send the data the frontend needs.
     return {
-      streamKey: stream.streamKey,
       isActive: stream.isActive,
       lastActiveAt: stream.lastActiveAt,
       title: stream.title,
-      createdAt: stream.createdAt
     };
   }
 }

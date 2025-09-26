@@ -3,6 +3,7 @@ import NodeMediaServer from 'node-media-server';
 import { ConfigService } from '@nestjs/config';
 import { StreamService } from '../stream/stream.service';
 import * as fs from 'fs';
+import * as path from 'path'; // <-- 1. Import the 'path' module
 
 @Injectable()
 export class NmsService implements OnModuleInit {
@@ -20,6 +21,14 @@ export class NmsService implements OnModuleInit {
       this.logger.error(`❌ FFmpeg binary not found at path specified in .env: ${ffmpegPath}`);
       process.exit(1);
     }
+    
+    // 2. Define the absolute path to the media directory
+    const mediaRoot = path.join(__dirname, '..', '..', 'media');
+    
+    // 3. Ensure the directory exists
+    if (!fs.existsSync(mediaRoot)) {
+      fs.mkdirSync(mediaRoot, { recursive: true });
+    }
 
     const config = {
       rtmp: {
@@ -31,7 +40,7 @@ export class NmsService implements OnModuleInit {
       },
       http: {
         port: 8000,
-        mediaroot: './media',
+        mediaroot: "C:/Users/kumar/OneDrive/Desktop/airena/apps/rtmps-server/media",// <-- 4. Use the absolute path here
         allow_origin: '*',
       },
       trans: {
@@ -40,15 +49,15 @@ export class NmsService implements OnModuleInit {
           {
             app: 'live',
             hls: true,
-            hlsFlags: '[hls_time=10:hls_list_size=3:hls_flags=delete_segments]',
+            hlsFlags: '[hls_time=1:hls_list_size=3:hls_flags=delete_segments]',
             dash: true,
           },
         ],
       },
       auth: {
         api: true,
-        api_user: 'admin', // Should be from .env
-        api_pass: 'admin', // Should be from .env
+        api_user: 'admin',
+        api_pass: 'admin',
       },
     };
 
@@ -57,6 +66,7 @@ export class NmsService implements OnModuleInit {
     this.nms.run();
   }
 
+  // ... (the rest of the file is the same)
   private setupStreamEvents() {
     this.nms.on('prePublish', async (id, StreamPath, args) => {
       const streamKey = StreamPath.split('/').pop();
@@ -67,7 +77,6 @@ export class NmsService implements OnModuleInit {
         return (session as any).reject();
       }
 
-      this.logger.log(`[AUTH] Attempting to publish stream with key: ${streamKey}`);
       const stream = await this.streamService.getStreamByKey(streamKey);
 
       if (!stream) {
