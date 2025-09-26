@@ -1,0 +1,39 @@
+# Stage 1: Build the application in a temporary container
+FROM node:18-alpine AS builder
+WORKDIR /usr/src/app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy the rest of the application source code
+COPY . .
+
+# Build the TypeScript project
+RUN npm run build
+
+# ---
+
+# Stage 2: Create the final, smaller production image
+FROM node:18-alpine
+WORKDIR /usr/src/app
+
+# Install FFmpeg, the crucial dependency for your media server
+RUN apk add --no-cache ffmpeg
+
+# Copy only the necessary files from the builder stage
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/package*.json ./
+
+# Create directories for persistent data (database, media files)
+# These will be mounted to a persistent disk on your hosting provider
+RUN mkdir -p data media
+
+# Expose the ports your application uses
+EXPOSE 3000
+EXPOSE 8000
+EXPOSE 1935
+
+# Command to run the application
+CMD ["node", "dist/main"]

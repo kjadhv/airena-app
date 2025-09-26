@@ -10,18 +10,21 @@ import { Stream } from './stream/stream.entity';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
-    // Database configuration is now loaded async from env variables
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        type: 'sqlite',
-        database: configService.get<string>('DATABASE_PATH', 'data/streaming.db'),
+        type: 'postgres',
+        url: configService.get<string>('DATABASE_URL'),
         entities: [Stream, User],
-        synchronize: configService.get<string>('NODE_ENV') !== 'production', // Use synchronize only in dev
+        // MODIFIED: Kept synchronize: true for testing purposes
+        synchronize: true, 
+        ssl: {
+          rejectUnauthorized: false,
+        },
       }),
     }),
-    StreamModule, // This module provides StreamService
+    StreamModule,
     MetricsModule,
   ],
   providers: [NmsService],

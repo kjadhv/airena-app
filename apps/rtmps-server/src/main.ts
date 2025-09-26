@@ -12,7 +12,7 @@ async function bootstrap() {
 
   // The NmsService will now start automatically via onModuleInit.
 
-  await app.listen(3000); // NestJS API server port
+  await app.listen('0.0.0.0'); // NestJS API server port
   console.log(`Application is running on: ${await app.getUrl()}`);
   console.log('Node Media Server is running on RTMP port 1935 and HTTP port 8000');
 }
