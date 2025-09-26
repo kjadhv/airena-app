@@ -1,13 +1,12 @@
-// REMOVED: forwardRef and AppModule are no longer needed here
 import { Module, InternalServerErrorException } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as admin from 'firebase-admin';
 import { StreamService } from './stream.service';
 import { StreamController } from './stream.controller';
 import { MetricsModule } from '../metrics/metric.module';
-import { NmsService } from '../nms/nms.service'; // ADDED: Import NmsService
+import { NmsService } from '../nms/nms.service';
 
-// --- NOTE: No changes to the firebase providers ---
+
 const firebaseProvider = {
   provide: 'FIREBASE_APP',
   useFactory: (configService: ConfigService) => {
@@ -49,10 +48,10 @@ const storageProvider = {
     firestoreProvider,
     storageProvider,
     StreamService,
-    NmsService, // FIX: NmsService now lives inside the StreamModule
+    NmsService, 
   ],
   controllers: [StreamController],
-  // FIX: Export both services so other modules (like AppModule for HlsController) can use them.
+
   exports: [StreamService, NmsService],
 })
 export class StreamModule {}

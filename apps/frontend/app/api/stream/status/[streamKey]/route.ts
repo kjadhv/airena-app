@@ -1,20 +1,10 @@
 // File: app/api/stream/status/[streamKey]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin if not already done
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  });
-}
-
-const db = getFirestore();
+// This API route acts as a proxy to the real RTMP server's status endpoint.
+// This is crucial to prevent leaking the RTMP server's direct address to the client
+// and to handle the race condition where a stream is marked "live" in the DB
+// before the HLS files are actually available.
 
 export async function GET(
   request: NextRequest,
@@ -22,36 +12,42 @@ export async function GET(
 ) {
   try {
     const { streamKey } = params;
+    const rtmpServerBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     if (!streamKey) {
       return NextResponse.json({ error: 'Stream key is required' }, { status: 400 });
     }
 
-    // Query Firestore (Admin SDK) to find user with this stream key
-    const usersRef = db.collection('users');
-    const querySnapshot = await usersRef.where('streamKey', '==', streamKey).get();
-
-    if (querySnapshot.empty) {
-      return NextResponse.json({ error: 'Stream not found' }, { status: 404 });
+    if (!rtmpServerBaseUrl) {
+      console.error('NEXT_PUBLIC_API_BASE_URL is not set in the environment.');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    // Get the first (should be only) matching user
-    const userDoc = querySnapshot.docs[0];
-    const userData = userDoc.data();
+    // Construct the full URL to the rtmp-server's status endpoint
+    const statusUrl = `${rtmpServerBaseUrl}/stream/status/${streamKey}`;
 
-    const isLive = userData?.isStreaming || false;
-
-    return NextResponse.json({
-      isLive,
-      streamKey,
-      stats: {
-        viewers: userData?.viewers || 0,
-        bitrate: userData?.bitrate || 0,
-        fps: userData?.fps || 0,
-      },
+    // Fetch the status from the rtmp-server
+    const response = await fetch(statusUrl, {
+      // Use a short timeout and revalidate frequently to get the latest status quickly
+      next: { revalidate: 1 } 
     });
+
+    // If the rtmp-server returned an error (e.g., 404), proxy that response
+    if (!response.ok) {
+      const errorData = await response.json();
+      return NextResponse.json(errorData, { status: response.status });
+    }
+
+    // If the request was successful, proxy the data
+    const data = await response.json();
+
+    // The data from the rtmp-server should be in the format { isLive, hlsUrl, ... }
+    // We just pass it through.
+    return NextResponse.json(data);
+
   } catch (error) {
-    console.error('Stream status check error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Error proxying stream status request:', error);
+    // This catches network errors between this proxy and the rtmp-server
+    return NextResponse.json({ error: 'Internal server error while fetching stream status' }, { status: 500 });
   }
 }

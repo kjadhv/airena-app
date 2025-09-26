@@ -28,14 +28,6 @@ export class NmsService implements OnModuleInit, OnModuleDestroy {
     const defaultFfmpegPath = isWindows ? 'C:/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
     const ffmpegPath = this.configService.get<string>('FFMPEG_PATH', defaultFfmpegPath);
 
-    if (!fs.existsSync(ffmpegPath)) {
-      this.logger.error(`FFmpeg binary not found at: ${ffmpegPath}`);
-      this.logger.error('Please install FFmpeg or set the FFMPEG_PATH in your .env.local file.');
-      this.logger.error('Windows: Download from https://ffmpeg.org/download.html');
-      this.logger.error('Linux/Mac: Use package manager (apt install ffmpeg, brew install ffmpeg)');
-      process.exit(1);
-    }
-
     this.logger.log(`Media root resolved to: ${this.mediaRoot}`);
     
     if (!fs.existsSync(this.mediaRoot)) {
@@ -78,8 +70,8 @@ export class NmsService implements OnModuleInit, OnModuleDestroy {
           {
             app: 'live',
             hls: true,
-            // FIX: Simplified the HLS flags to be more compatible.
-            hlsFlags: '[hls_time=2:hls_list_size=3:hls_flags=delete_segments]',
+           
+            hlsFlags: '[hls_time=10:hls_list_size=3:hls_flags=delete_segments]',
             mp4: true,
             mp4Flags: '[movflags=frag_keyframe+empty_moov]',
           },

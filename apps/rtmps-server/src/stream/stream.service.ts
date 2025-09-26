@@ -37,7 +37,7 @@ export class StreamService {
     private readonly nmsService: NmsService,
   ) {
     this.rtmpServerUrl = this.configService.get<string>('RTMP_BASE_URL', 'rtmp://localhost:1935');
-    this.hlsServerUrl = this.configService.get<string>('HLS_BASE_URL', 'http://localhost:8080');
+    this.hlsServerUrl = this.configService.get<string>('HLS_BASE_URL', 'http://localhost:8000');
     this.usersCollection = this.firestore.collection('users');
     this.streamsCollection = this.firestore.collection('streams');
   }

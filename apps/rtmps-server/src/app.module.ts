@@ -1,12 +1,12 @@
 import { HlsController } from './hls/hls.controller';
-// REMOVED: forwardRef as it's no longer needed here
+
 import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { StreamController } from './stream/stream.controller';
 import { FirebaseAuthMiddleware } from './firebase-auth.middleware';
 import { MetricsModule } from './metrics/metric.module';
 import { StreamModule } from './stream/stream.module';
-// REMOVED: NmsService is no longer provided here
+
 
 @Module({
   imports: [
@@ -14,12 +14,12 @@ import { StreamModule } from './stream/stream.module';
       isGlobal: true,
       envFilePath: '../.env.local',
     }),
-    // FIX: Just import StreamModule directly now.
+    
     StreamModule,
     MetricsModule,
   ],
   controllers: [HlsController],
-  // FIX: NmsService has been moved to StreamModule.
+  
   providers: [],
   exports: [],
 })

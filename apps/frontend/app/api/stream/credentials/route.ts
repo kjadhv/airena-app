@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * Handles GET requests to fetch or create stream credentials.
- */
+
 export async function GET(request: NextRequest) {
   const authorization = request.headers.get('Authorization');
 

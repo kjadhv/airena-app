@@ -10,9 +10,10 @@ export class HlsController {
 
   // INJECT NmsService to get the correct media root
   constructor(private readonly nmsService: NmsService) {
-    // We can log the path at initialization to be sure
-    const mediaRoot = this.nmsService.getMediaRoot();
-    this.logger.log(`📺 HLS Controller initialized with media root: ${mediaRoot}`);
+    // DO NOT resolve mediaRoot here. NmsService's onModuleInit, which sets the path,
+    // may not have run yet, leading to an 'undefined' path.
+    // We will resolve it on each request instead.
+    this.logger.log(`📺 HLS Controller initialized.`);
   }
 
   // --- SERVE HLS PLAYLIST (.m3u8) ---
