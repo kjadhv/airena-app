@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
 import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
-import { Key, Copy, Check, Eye, XCircle, RefreshCw, ExternalLink, AlertTriangle, EyeOff, Play, Pause } from "lucide-react";
+import { Key, Copy, Check, Eye, XCircle, RefreshCw, ExternalLink, AlertTriangle, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 interface StreamCredentials {
@@ -24,6 +24,7 @@ interface StreamStats {
 }
 
 const GoLivePage = () => {
+  const backendUrl = process.env.NESTJS_BACKEND_URL || "http://localhost:8000";
   const { user, loading, isCreator, isAdmin } = useAuth();
   const router = useRouter();
 
@@ -56,12 +57,7 @@ const GoLivePage = () => {
     else if (!loading && user && !isCreator && !isAdmin) router.push("/");
   }, [user, loading, isCreator, isAdmin, router]);
 
-  // Fetch credentials
-  useEffect(() => {
-    if (!loading && user && (isCreator || isAdmin)) fetchCredentials();
-  }, [user, loading, isCreator, isAdmin]);
-
-  const fetchCredentials = async () => {
+  const fetchCredentials = useCallback(async () => {
     setIsLoadingCreds(true);
     setError("");
     if (!user) {
@@ -71,27 +67,36 @@ const GoLivePage = () => {
     }
     try {
       const idToken = await user.getIdToken();
-      const res = await fetch("http://localhost:8000/stream/credentials", {
+      const res = await fetch(`${backendUrl}/stream/credentials`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      
+
       if (!res.ok) {
         const errorText = await res.text();
         console.error('API Error:', res.status, errorText);
         throw new Error(`Failed to fetch credentials: ${res.status}`);
       }
-      
+
       const data: StreamCredentials = await res.json();
       setCredentials(data);
       setIsLive(data.isStreaming || false);
       if (data.isStreaming) setStreamStartTime(new Date());
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Credential fetch error:", err);
-      setError(err.message || "Failed to fetch credentials. Make sure the backend is running on port 8000.");
+      if (err instanceof Error) {
+        setError(err.message || "Failed to fetch credentials. Make sure the backend is running on port 8000.");
+      } else {
+        setError("Failed to fetch credentials. Make sure the backend is running on port 8000.");
+      }
     } finally {
       setIsLoadingCreds(false);
     }
-  };
+  }, [user, backendUrl]);
+
+  // Fetch credentials
+  useEffect(() => {
+    if (!loading && user && (isCreator || isAdmin)) fetchCredentials();
+  }, [user, loading, isCreator, isAdmin, fetchCredentials]);
 
   const handleRegenerateKey = async () => {
     if (!window.confirm("Regenerating your key will disconnect active streams. Continue?")) return;
@@ -100,7 +105,7 @@ const GoLivePage = () => {
     setError("");
     try {
       const idToken = await user.getIdToken();
-      const res = await fetch("http://localhost:8000/stream/regenerate-key", {
+      const res = await fetch(`${backendUrl}/stream/regenerate-key`, {
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}` },
       });
@@ -112,7 +117,7 @@ const GoLivePage = () => {
       }
       
       const data = await res.json();
-      setCredentials((prev) => ({
+      setCredentials(() => ({
         streamKey: data.streamKey,
         streamUrl: data.streamUrl,
         hlsUrl: data.hlsUrl,
@@ -127,9 +132,13 @@ const GoLivePage = () => {
         hlsRef.current = null;
       }
       setConnectionStatus('idle');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Failed to regenerate key");
+      if (err instanceof Error) {
+        setError(err.message || "Failed to regenerate key");
+      } else {
+        setError("Failed to regenerate key");
+      }
     } finally {
       setIsRegenerating(false);
     }
@@ -217,7 +226,7 @@ const GoLivePage = () => {
         }
       });
       
-      hls.on(Hls.Events.MANIFEST_LOADED, (event, data) => {
+      hls.on(Hls.Events.MANIFEST_LOADED, () => {
         console.log('HLS manifest loaded successfully');
         setConnectionStatus('connected');
         setError(''); // Clear any previous errors
@@ -267,7 +276,7 @@ const GoLivePage = () => {
     
     const pollStreamStatus = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/stream/status/${credentials.streamKey}`);
+        const res = await fetch(`${backendUrl}/stream/status/${credentials.streamKey}`);
         if (res.ok) {
           const status = await res.json();
           setIsLive(status.isLive);
@@ -297,7 +306,7 @@ const GoLivePage = () => {
     // Then poll every 5 seconds
     const interval = setInterval(pollStreamStatus, 5000);
     return () => clearInterval(interval);
-  }, [credentials?.streamKey, streamStartTime]);
+  }, [credentials?.streamKey, streamStartTime, backendUrl]);
 
   // Update uptime
   useEffect(() => {
@@ -557,14 +566,14 @@ const GoLivePage = () => {
               <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</div>
               <div>
                 <div className="font-medium">Configure Stream Settings</div>
-                <div className="text-gray-400">Go to Settings → Stream, select "Custom", and paste your RTMP URL and Stream Key</div>
+                <div className="text-gray-400">Go to Settings → Stream, select &quot;Custom&quot;, and paste your RTMP URL and Stream Key</div>
               </div>
             </div>
             <div className="flex gap-3">
               <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</div>
               <div>
                 <div className="font-medium">Start Streaming</div>
-                <div className="text-gray-400">Click "Start Streaming" in OBS and watch your live preview above</div>
+                <div className="text-gray-400">Click &quot;Start Streaming&quot; in OBS and watch your live preview above</div>
               </div>
             </div>
           </div>

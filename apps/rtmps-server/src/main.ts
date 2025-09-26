@@ -1,38 +1,45 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { Logger } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+
+import { NmsService } from './nms/nms.service'; // Import NmsService
+import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
-  // Validate required environment variables
-  const requiredEnvVars = ['FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY'];
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  if (missingVars.length > 0) {
-    Logger.error(`Missing required environment variables: ${missingVars.join(', ')}`, 'Bootstrap');
-    Logger.error('Please check your .env.local file', 'Bootstrap');
-    process.exit(1);
-  }
+  // Register Firebase Auth middleware
+  // Note: For class-based middleware to be truly global in typical NestJS,
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    // This ensures that the middleware is instantiated correctly for each request
+    // if it has dependencies or needs to be a class instance.
+    // If FirebaseAuthMiddleware is simple and doesn't rely on DI for its own dependencies,
+    // new FirebaseAuthMiddleware().use(req, res, next) would also work.
+    // However, if FirebaseAuthMiddleware were to be @Injectable() and have its own
+    // dependencies injected by Nest, this approach of manual instantiation here
+    // would not work for those dependencies. A functional middleware or module-based
+    // registration would be better. For now, assuming FirebaseAuthMiddleware is self-contained.
+    // const firebaseAuthMiddleware = new FirebaseAuthMiddleware();
+    // firebaseAuthMiddleware.use(req, res, next);
+  });
 
-  const port = 8000;
-  const app = await NestFactory.create(AppModule);
-
-  // Enable CORS to allow your frontend to communicate with this backend
+  // Enable CORS for frontend-backend communication
   app.enableCors({
-    origin: '*', // Configure appropriately for production
+    origin: '*', // your frontend URL
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  await app.listen(port);
-  
-  Logger.log(`🚀 Backend is running on: http://localhost:${port}`, 'Bootstrap');
-  Logger.log(`📡 RTMP Server should be on: rtmp://localhost:1935`, 'Bootstrap');
-  Logger.log(`📺 HLS Playback via: http://localhost:${port}/live/[streamKey]/index.m3u8`, 'Bootstrap');
-  Logger.log(`🔧 Debug streams: http://localhost:${port}/debug/streams`, 'Bootstrap');
-}
+  // Serve static assets (optional)
+  app.useStaticAssets(join(__dirname, '..', 'public'));
 
-bootstrap().catch((error) => {
-  Logger.error('Failed to start application', 'Bootstrap');
-  Logger.error(error, 'Bootstrap');
-  process.exit(1);
-});
+  // Inject NmsService and start the NodeMediaServer
+  const nmsService = app.get(NmsService);
+  nmsService.onModuleInit(); // This will start NMS
+
+  await app.listen(3000, '0.0.0.0');
+  console.log(`Application is running on: ${await app.getUrl()}`);
+}
+bootstrap();

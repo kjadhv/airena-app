@@ -1,56 +1,39 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import NodeMediaServer from 'node-media-server';
 import { MetricService } from '../metrics/metric.service';
-import { StreamService } from '../stream/stream.service';
-import { ConfigService } from '@nestjs/config';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
-export class NmsService implements OnModuleInit, OnModuleDestroy {
+export class NmsService implements OnModuleInit {
   private nms!: NodeMediaServer;
   private readonly logger = new Logger(NmsService.name);
-  private nmsConfig: any;
-  private readonly mediaRoot: string;
 
   constructor(
     private readonly metricService: MetricService,
-    @Inject(forwardRef(() => StreamService))
-    private readonly streamService: StreamService,
-    private readonly configService: ConfigService,
-  ) {
-    this.mediaRoot = this.configService.get<string>('MEDIA_ROOT') || path.join(process.cwd(), 'media');
-    this.logger.log(`NmsService using media root: ${this.mediaRoot}`);
-  }
+  ) {}
 
   onModuleInit() {
     const isWindows = process.platform === 'win32';
-    const defaultFfmpegPath = isWindows ? 'C:/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
-    const ffmpegPath = this.configService.get<string>('FFMPEG_PATH', defaultFfmpegPath);
 
-    this.logger.log(`Media root resolved to: ${this.mediaRoot}`);
-    
-    if (!fs.existsSync(this.mediaRoot)) {
-      try {
-        fs.mkdirSync(this.mediaRoot, { recursive: true });
-        this.logger.log(`Created media root directory: ${this.mediaRoot}`);
-      } catch (error) {
-        this.logger.error(`Failed to create media root directory: ${error instanceof Error ? error.message : String(error)}`);
-        process.exit(1);
-      }
+    // Hardcoded FFmpeg binary path (update according to your actual locations)
+    let ffmpegPath = isWindows
+      ? 'C:/ffmpeg/bin/ffmpeg.exe' // Windows path
+      : '/usr/bin/ffmpeg';         // Linux path
+
+    // Normalize path slashes for Windows
+    if (isWindows && ffmpegPath.includes('\\')) {
+      ffmpegPath = ffmpegPath.replace(/\\/g, '/');
     }
 
-    const liveDir = path.join(this.mediaRoot, 'live');
-    if (!fs.existsSync(liveDir)) {
-      try {
-        fs.mkdirSync(liveDir, { recursive: true });
-        this.logger.log(`Created live directory: ${liveDir}`);
-      } catch (error) {
-        this.logger.error(`Failed to create live directory: ${error instanceof Error ? error.message : String(error)}`);
-      }
+    if (!fs.existsSync(ffmpegPath)) {
+      this.logger.error(`❌ FFmpeg binary not found at: ${ffmpegPath}`);
+      process.exit(1);
     }
 
-    this.nmsConfig = {
+    const mediaRoot = './media';
+
+    const config = {
       rtmp: {
         port: 1935,
         chunk_size: 60000,
@@ -59,10 +42,9 @@ export class NmsService implements OnModuleInit, OnModuleDestroy {
         ping_timeout: 60,
       },
       http: {
-        port: 8080,
-        mediaroot: this.mediaRoot,
+        mediaroot: mediaRoot,
+        port: 8000,
         allow_origin: '*',
-        api: true,
       },
       trans: {
         ffmpeg: ffmpegPath,
@@ -70,145 +52,150 @@ export class NmsService implements OnModuleInit, OnModuleDestroy {
           {
             app: 'live',
             hls: true,
-           
-            hlsFlags: '[hls_time=10:hls_list_size=3:hls_flags=delete_segments]',
-            mp4: true,
-            mp4Flags: '[movflags=frag_keyframe+empty_moov]',
+            hlsFlags: '[hls_time=10:hls_list_size=6:hls_flags=delete_segments]',
+            dash: false,
           },
         ],
       },
-      logType: 3,
     };
 
-    this.nms = new NodeMediaServer(this.nmsConfig);
-    this.setupStreamEvents();
+    this.nms = new NodeMediaServer(config);
+    this.setupStreamEvents(ffmpegPath);
     this.nms.run();
-
-    this.logger.log(`NodeMediaServer started successfully!`);
-    this.logger.log(`  RTMP Server: rtmp://localhost:1935`);
-    this.logger.log(`  HTTP Server: http://localhost:8080 (NodeMediaServer internal)`);
-    this.logger.log(`  Media Root: ${this.mediaRoot}`);
-    this.logger.log(`  HLS Playback: Via NestJS app on port 8000`);
   }
 
-  private setupStreamEvents() {
-    this.nms.on('preConnect', (id, args) => this.logger.debug(`Client connecting with session info`));
-    this.nms.on('doneConnect', (id, args) => this.logger.debug(`Client connected successfully`));
+  private setupStreamEvents(ffmpegPath: string) {
+    this.nms.on('postPublish', async (id, streamPath) => {
+      const streamKey = streamPath.split('/').pop() || 'defaultStreamKey';
+      this.logger.log(`[NodeEvent] Stream started for ${streamKey}`);
 
-    this.nms.on('prePublish', (id, streamPath, args) => {
-      const streamKey = this.extractStreamKeyFromEvent(id, streamPath, args);
-      if (streamKey) {
-        this.logger.log(`Stream starting: ${streamKey}`);
-        this.streamService.startStream(streamKey).catch(err => {
-          this.logger.warn(`Failed to mark stream as started in database: ${err instanceof Error ? err.message : String(err)}`);
-        });
-      } else {
-        this.logger.warn('Could not extract stream key from prePublish event');
-        this.logEventDetails('prePublish', id, streamPath, args);
-      }
-    });
+      // const vodOutputPath = this.vodService.generateVodPath(streamKey);
 
-    this.nms.on('postPublish', (id, streamPath, args) => {
-      const streamKey = this.extractStreamKeyFromEvent(id, streamPath, args);
-      if (streamKey) this.logger.log(`Stream is now live: ${streamKey}`);
-    });
-
-    this.nms.on('donePublish', (id, streamPath, args) => {
-      (async () => {
-        const streamKey = this.extractStreamKeyFromEvent(id, streamPath, args);
-        if (!streamKey) {
-          this.logger.warn('Could not extract stream key from donePublish event');
-          this.logEventDetails('donePublish', id, streamPath, args);
-          return;
-        }
-        this.logger.log(`Stream ended: ${streamKey}`);
-        try {
-          await this.streamService.stopStream(streamKey);
-          this.logger.log(`Stream ${streamKey} marked as stopped in database`);
-        } catch (err) {
-          this.logger.warn(`Failed to mark stream as stopped: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        this.handleStreamRecording(streamKey);
-      })();
-    });
-
-    this.nms.on('prePlay', (id, streamPath, args) => {
-      const streamKey = this.extractStreamKeyFromEvent(id, streamPath, args);
-      if (streamKey) this.logger.debug(`Client starting playback: ${streamKey}`);
-    });
-
-    this.nms.on('donePlay', (id, streamPath, args) => {
-      const streamKey = this.extractStreamKeyFromEvent(id, streamPath, args);
-      if (streamKey) this.logger.debug(`Client stopped playback: ${streamKey}`);
-    });
-  }
-
-  private extractStreamKeyFromEvent(id: any, streamPath: any, args: any): string | null {
-    this.logger.debug(`Extracting stream key from event - id: ${typeof id}, streamPath: ${typeof streamPath}, args: ${typeof args}`);
-    let actualStreamPath: string | null = null;
-    if (typeof streamPath === 'string') actualStreamPath = streamPath;
-    else if (typeof id === 'string' && id.includes('/live/')) actualStreamPath = id;
-    else if (id && typeof id === 'object' && id.streamPath) actualStreamPath = id.streamPath;
-    
-    if (actualStreamPath) {
-      const matches = actualStreamPath.match(/\/live\/([^\/\?]+)/);
-      if (matches && matches[1]) {
-        const streamKey = matches[1];
-        this.logger.debug(`Extracted stream key: ${streamKey} from path: ${actualStreamPath}`);
-        return streamKey;
-      }
-    }
-    this.logger.debug(`Could not extract stream key from event data`);
-    return null;
-  }
-
-  private logEventDetails(eventType: string, id: any, streamPath: any, args: any) {
-    this.logger.debug(`${eventType} event details: id type: ${typeof id}, streamPath type: ${typeof streamPath}, args type: ${typeof args}`);
-    if (typeof id === 'string') this.logger.debug(`  id value: ${id}`);
-    if (typeof streamPath === 'string') this.logger.debug(`  streamPath value: ${streamPath}`);
-  }
-
-  private async handleStreamRecording(streamKey: string) {
-    setTimeout(async () => {
-      const videoPath = path.join(this.mediaRoot, 'live', streamKey, 'index.mp4');
-      if (fs.existsSync(videoPath)) {
-        try {
-          const stats = fs.statSync(videoPath);
-          const sizeMB = Math.round(stats.size / 1024 / 1024);
-          if (stats.size > 0) {
-            this.logger.log(`Found recording: ${videoPath} (${sizeMB}MB)`);
-            await this.streamService.saveFinishedStream(streamKey, videoPath);
-            this.logger.log(`Successfully processed recording for ${streamKey}`);
-          } else {
-            this.logger.warn(`Recording file is empty: ${videoPath}`);
-            fs.unlinkSync(videoPath);
-          }
-        } catch (err) {
-          this.logger.error(`Failed to save stream ${streamKey}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      } else {
-        this.logger.warn(`No recording found at: ${videoPath}`);
-        this.logger.warn('This may be normal if the stream was very short or FFmpeg failed to create the file');
-      }
-    }, 5000);
-  }
-
-  getMediaRoot(): string {
-    return this.mediaRoot;
-  }
-
-  getNodeMediaServer(): NodeMediaServer {
-    return this.nms;
-  }
-
-  async onModuleDestroy() {
-    if (this.nms) {
       try {
-        this.nms.stop();
-        this.logger.log('NodeMediaServer stopped gracefully');
-      } catch (error) {
-        this.logger.error(`Error stopping NodeMediaServer: ${error instanceof Error ? error.message : String(error)}`);
+        const ffmpeg = spawn(ffmpegPath, [
+          '-i', `rtmp://127.0.0.1/live/${streamKey}`,
+          '-c:v', 'copy',
+          '-c:a', 'aac',
+          '-y',
+          
+        ]);
+
+        ffmpeg.stderr.on('data', (data: Buffer) => {
+          this.logger.verbose(`[FFmpeg VOD Stderr][${streamKey}] ${data.toString().trim()}`);
+        });
+
+        ffmpeg.on('error', (err) => {
+          this.logger.error(`[FFmpeg VOD Error][${streamKey}] ${err.message}`, err.stack);
+        });
+
+        ffmpeg.on('close', (code) => {
+          if (code !== 0) {
+            this.logger.error(`[FFmpeg VOD Error][${streamKey}] exited with code: ${code}`);
+          } else {
+            this.logger.log(`[FFmpeg VOD][${streamKey}] completed successfully.`);
+          }
+          this.metricService.resetMetrics(streamKey);
+        });
+      } catch (error: unknown) {
+        this.logUnknownError(`[FFmpeg VOD Error][${streamKey}]`, error);
       }
+
+      // === Metrics ===
+      let lastTotalSize = 0;
+      let lastTimestamp = Date.now();
+      let lastTime = Date.now();
+      let dataChunksProcessed = 0;
+
+      try {
+        const metricsFfmpeg = spawn(ffmpegPath, [
+          '-i', `rtmp://127.0.0.1/live/${streamKey}`,
+          '-f', 'null',
+          '-',
+          '-stats',
+          '-progress', 'pipe:1',
+        ]);
+
+        metricsFfmpeg.on('error', (err) => {
+          this.logger.error(`[FFmpeg Metrics Error][${streamKey}] ${err.message}`, err.stack);
+        });
+
+        metricsFfmpeg.stdout.on('data', (data: Buffer) => {
+          const lines = data.toString().split('\n');
+          let totalSize = lastTotalSize;
+
+          for (const line of lines) {
+            const [key, valueRaw] = line.trim().split('=');
+            const value = valueRaw ?? '0';
+            if (key === 'total_size') totalSize = parseInt(value, 10);
+          }
+
+          const now = Date.now();
+          const deltaBytes = totalSize - lastTotalSize;
+          const durationSec = (now - lastTimestamp) / 1000;
+          dataChunksProcessed++;
+
+          if (durationSec <= 0) {
+            this.logger.verbose(`[FFmpeg Metrics][${streamKey}] Skipping short interval.`);
+            lastTimestamp = now;
+            return;
+          }
+
+          const bitrate = (deltaBytes * 8) / 1024 / durationSec;
+          const latency = now - lastTime;
+          const bandwidth = bitrate * 1.2;
+
+          lastTotalSize = totalSize;
+          lastTimestamp = now;
+          lastTime = now;
+
+          if (dataChunksProcessed < 3) {
+            this.logger.verbose(`[FFmpeg Metrics][${streamKey}] Stabilizing...`);
+            return;
+          }
+
+          this.metricService.updateMetrics(streamKey, {
+            bitrate: Math.round(bitrate),
+            latency,
+            bandwidth: Number(bandwidth.toFixed(2)),
+          });
+        });
+
+        metricsFfmpeg.stderr.on('data', (data: Buffer) => {
+          this.logger.warn(`[FFmpeg Metrics Stderr][${streamKey}] ${data.toString().trim()}`);
+        });
+
+        metricsFfmpeg.on('close', (code) => {
+          if (code !== 0) {
+            this.logger.error(`[FFmpeg Metrics Error][${streamKey}] exited with code: ${code}`);
+          } else {
+            this.logger.log(`[FFmpeg Metrics][${streamKey}] completed.`);
+          }
+        });
+      } catch (error: unknown) {
+        this.logUnknownError(`[FFmpeg Metrics Error][${streamKey}]`, error);
+      }
+    });
+
+    this.nms.on('donePublish', (id, streamPath) => {
+      const streamKey = streamPath.split('/').pop() || 'defaultStreamKey';
+      this.logger.log(`[NodeEvent][${streamKey}] Stream publishing finished.`);
+    });
+
+    this.nms.on('error', (err: unknown) => {
+      const message = `[NodeMediaServer Global Error]`;
+      if (err instanceof Error) {
+        this.logger.error(`${message}: ${err.message}`, err.stack);
+      } else {
+        this.logger.error(`${message}: ${String(err)}`);
+      }
+    });
+  }
+
+  private logUnknownError(prefix: string, error: unknown) {
+    if (error instanceof Error) {
+      this.logger.error(`${prefix}: ${error.message}`, error.stack);
+    } else {
+      this.logger.error(`${prefix}: ${String(error)}`);
     }
   }
 }

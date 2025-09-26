@@ -1,10 +1,7 @@
-// apps/rtmps-server/src/stream/stream.controller.ts
-
 import {
   Controller,
   Get,
   Post,
-  Put,
   Body,
   Req,
   Param,
@@ -12,8 +9,9 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { StreamService } from './stream.service';
+import { MetricService } from '../metrics/metric.service';
 
-// Interface to add the authenticated user to the request object
+// Extend Request to include Firebase UID
 interface FirebaseRequest extends Request {
   user?: {
     uid: string;
@@ -23,12 +21,11 @@ interface FirebaseRequest extends Request {
 
 @Controller('stream')
 export class StreamController {
-  constructor(private readonly streamService: StreamService) {}
+  constructor(
+    private readonly streamService: StreamService,
+    private readonly metricService: MetricService,
+  ) {}
 
-  /**
-   * Gets credentials for the authenticated user.
-   * Protected by Firebase Auth Middleware.
-   */
   @Get('credentials')
   async getStreamCredentials(@Req() req: FirebaseRequest) {
     const firebaseId = req.user?.uid;
@@ -36,10 +33,6 @@ export class StreamController {
     return this.streamService.getOrCreateStreamKey(firebaseId);
   }
 
-  /**
-   * Generates a new stream key for the authenticated user.
-   * Protected by Firebase Auth Middleware.
-   */
   @Post('regenerate-key')
   async regenerateStreamKey(@Req() req: FirebaseRequest) {
     const firebaseId = req.user?.uid;
@@ -47,44 +40,68 @@ export class StreamController {
     return this.streamService.regenerateStreamKey(firebaseId);
   }
 
-  /**
-   * Updates settings for the authenticated user.
-   * Protected by Firebase Auth Middleware.
-   */
-  @Put('settings')
+  @Post('start/:streamKey')
+  async startStream(@Req() req: FirebaseRequest, @Param('streamKey') streamKey: string) {
+    const firebaseId = req.user?.uid;
+    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
+    return this.streamService.startStream(firebaseId, streamKey);
+  }
+
+  @Post('stop/:streamKey')
+  async stopStream(@Req() req: FirebaseRequest, @Param('streamKey') streamKey: string) {
+    const firebaseId = req.user?.uid;
+    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
+    return this.streamService.stopStream(firebaseId, streamKey);
+  }
+
+  @Get('list')
+  async listUserStreams(@Req() req: FirebaseRequest) {
+    const firebaseId = req.user?.uid;
+    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
+    return this.streamService.listUserStreams(firebaseId);
+  }
+
+  @Get(':streamKey')
+  async getStreamDetails(@Req() req: FirebaseRequest, @Param('streamKey') streamKey: string) {
+    const firebaseId = req.user?.uid;
+    if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
+    return this.streamService.getStreamDetails(firebaseId, streamKey);
+  }
+
+  @Get('status/:streamKey')
+  async getStreamStatus(@Param('streamKey') streamKey: string) {
+    const metrics = await this.metricService.getMetrics(streamKey);
+    return {
+      isLive: (metrics?.bitrate ?? 0) > 0,
+      bitrate: metrics?.bitrate ?? 0,
+      latency: metrics?.latency ?? 0,
+      bandwidth: metrics?.bandwidth ?? 0,
+    };
+  }
+
+  @Get('metrics/:streamKey')
+  async getStreamMetrics(@Param('streamKey') streamKey: string) {
+    const metrics = await this.metricService.getMetrics(streamKey);
+    return {
+      bitrate: metrics?.bitrate ?? 0,
+      latency: metrics?.latency ?? 0,
+      bandwidth: metrics?.bandwidth ?? 0,
+    };
+  }
+
+  @Post('settings/:streamKey')
   async updateStreamSettings(
     @Req() req: FirebaseRequest,
-    @Body() settings: Record<string, any>,
+    @Param('streamKey') streamKey: string,
+    @Body()
+    settings: {
+      quality?: string;
+      maxBitrate?: number;
+      resolution?: string;
+    },
   ) {
     const firebaseId = req.user?.uid;
     if (!firebaseId) throw new UnauthorizedException('User not authenticated.');
-    return this.streamService.updateStreamSettings(firebaseId, settings);
-  }
-
-  /**
-   * Webhook for the media server to call when a stream starts.
-   * This route is excluded from auth middleware.
-   */
-  @Post('start/:streamKey')
-  async startStream(@Param('streamKey') streamKey: string) {
-    return this.streamService.startStream(streamKey);
-  }
-
-  /**
-   * Webhook for the media server to call when a stream stops.
-   * This route is excluded from auth middleware.
-   */
-  @Post('stop/:streamKey')
-  async stopStream(@Param('streamKey') streamKey: string) {
-    return this.streamService.stopStream(streamKey);
-  }
-  
-  /**
-   * Public route to get the status and details of a stream.
-   * This route is excluded from auth middleware.
-   */
-  @Get('status/:streamKey')
-  async getStreamStatus(@Param('streamKey') streamKey: string) {
-    return this.streamService.getStreamDetails(streamKey);
+    return this.streamService.updateStreamSettings(firebaseId, streamKey, settings);
   }
 }

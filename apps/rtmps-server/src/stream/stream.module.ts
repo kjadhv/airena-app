@@ -1,57 +1,19 @@
-import { Module, InternalServerErrorException } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import * as admin from 'firebase-admin';
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { StreamService } from './stream.service';
 import { StreamController } from './stream.controller';
-import { MetricsModule } from '../metrics/metric.module';
-import { NmsService } from '../nms/nms.service';
-
-
-const firebaseProvider = {
-  provide: 'FIREBASE_APP',
-  useFactory: (configService: ConfigService) => {
-    const serviceAccount = {
-      projectId: configService.get<string>('FIREBASE_PROJECT_ID'),
-      clientEmail: configService.get<string>('FIREBASE_CLIENT_EMAIL'),
-      privateKey: configService.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n'),
-    };
-    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-      throw new InternalServerErrorException('Firebase credentials are not configured in .env.local');
-    }
-    if (admin.apps.length === 0) {
-      return admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    }
-    return admin.app();
-  },
-  inject: [ConfigService],
-};
-
-const firestoreProvider = {
-  provide: 'FIRESTORE',
-  useFactory: (app: admin.app.App) => app.firestore(),
-  inject: ['FIREBASE_APP'],
-};
-
-const storageProvider = {
-  provide: 'STORAGE_BUCKET',
-  useFactory: (app: admin.app.App, configService: ConfigService) => {
-    const bucketName = `${configService.get<string>('FIREBASE_PROJECT_ID')}.appspot.com`;
-    return app.storage().bucket(bucketName);
-  },
-  inject: ['FIREBASE_APP', ConfigService],
-};
+import { MetricService } from '../metrics/metric.service';
+import { MetricController } from '../metrics/metric.controller';
+import { User } from './user.entity';
+import { Stream } from './stream.entity'; // Import Stream entity
+import { MetricsModule } from '../metrics/metric.module';  // Import MetricsModule
 
 @Module({
-  imports: [ConfigModule, MetricsModule],
-  providers: [
-    firebaseProvider,
-    firestoreProvider,
-    storageProvider,
-    StreamService,
-    NmsService, 
+  imports: [
+    TypeOrmModule.forFeature([ Stream, User]),
+    MetricsModule,  // Add MetricsModule to resolve MetricGateway dependency
   ],
-  controllers: [StreamController],
-
-  exports: [StreamService, NmsService],
+  providers: [StreamService, MetricService],
+  controllers: [StreamController, MetricController],
 })
 export class StreamModule {}

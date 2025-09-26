@@ -1,5 +1,4 @@
-// apps/rtmps-server/src/metrics/metric.module.ts
-
+// src/metrics/metrics.module.ts
 import { Module } from '@nestjs/common';
 import { MetricService } from './metric.service';
 import { MetricGateway } from './metrics.gateway';
@@ -8,6 +7,7 @@ import { MetricController } from './metric.controller';
 @Module({
   providers: [MetricService, MetricGateway],
   controllers: [MetricController],
-  exports: [MetricService], // You only need to export the service
+  exports: [MetricService, MetricGateway],
+
 })
 export class MetricsModule {}
