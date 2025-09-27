@@ -1,6 +1,6 @@
 {
   "type": "sqlite",
-  "database":"process.env.DATABASE_PATH",
+  "database": "process.env.DATABASE_PATH || ./data/streaming.db",
   "entities": ["src/**/*.entity{.ts,.js}"],
   "synchronize": true
 }
