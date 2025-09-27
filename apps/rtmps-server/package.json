@@ -11,6 +11,7 @@
         "serve": "npx serve public -l 8000"
     },
     "dependencies": {
+        "@nestjs/bullmq": "^11.0.3",
         "@nestjs/common": "^10.0.0",
         "@nestjs/config": "^4.0.2",
         "@nestjs/core": "^10.4.17",
@@ -21,6 +22,7 @@
         "@nestjs/serve-static": "^4.0.0",
         "@nestjs/typeorm": "^10.0.2",
         "@nestjs/websockets": "^10.4.17",
+        "bullmq": "^5.58.9",
         "express": "^4.18.2",
         "firebase-admin": "^13.3.0",
         "jsonwebtoken": "^9.0.2",
