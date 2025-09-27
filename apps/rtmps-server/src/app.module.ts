@@ -14,7 +14,7 @@ import { Stream } from './stream/stream.entity';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
+        type: 'sqlite',
         url: configService.get<string>('DATABASE_URL'),
         entities: [Stream, User],
         // MODIFIED: Kept synchronize: true for testing purposes
