@@ -1,11 +1,10 @@
 "use client";
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
 import { Upload, Film, Gamepad2, PlayCircle, Radio, Menu, X, Home, Search, TrendingUp, ArrowLeft, Clock, Eye, Share2, Check, Tag } from 'lucide-react';
 import { collection, getDocs, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 // --- ACTUAL IMPORTS ---
 import { useAuth } from '@/app/context/AuthContext';
@@ -16,14 +15,17 @@ import { db } from '@/app/firebase/config';
 
 const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
 
+// --- Type Definitions for Clarity ---
+type Category = 'all' | 'trending' | 'live' | 'games' | 'sports';
+
 // --- Interfaces Updated for new metadata ---
 interface Video {
     id: string; title: string; description: string; videoUrl: string;
     category: 'games' | 'sports'; createdAt: Timestamp; authorName: string;
     authorPhotoURL: string | null; views?: number;
-    thumbnailUrl?: string; 
-    tags?: string[]; 
-    duration?: number;
+    thumbnailUrl: string; 
+    tags: string[]; 
+    duration?: number; 
 }
 interface LiveStream {
     firebaseId: string; streamKey: string; displayName: string; photoURL: string | null; views?: number;
@@ -38,27 +40,25 @@ interface Content {
     duration?: number;
 }
 
+// --- Sidebar Props Interface ---
+interface WatchSidebarProps {
+    isOpen: boolean;
+    onCategorySelect: (category: Category) => void;
+    activeCategory: Category;
+}
 
 // --- Sidebar Component ---
-const WatchSidebar = ({ 
-    isOpen, 
-    onCategorySelect, 
-    activeCategory 
-}: { 
-    isOpen: boolean; 
-    onCategorySelect: (category: 'all' | 'trending' | 'live' | 'games' | 'sports') => void;
-    activeCategory: 'all' | 'trending' | 'live' | 'games' | 'sports';
-}) => {
+const WatchSidebar = ({ isOpen, onCategorySelect, activeCategory }: WatchSidebarProps) => {
     const [pathname, setPathname] = useState('');
     useEffect(() => { if (typeof window !== 'undefined') setPathname(window.location.pathname) }, []);
 
     const mainLinks = [ { href: '/', icon: Home, label: 'Home' }, { href: '/watch', icon: PlayCircle, label: 'Watch' }];
-    const categoryLinks = [
-        { category: 'all' as const, icon: Home, label: 'All' },
-        { category: 'trending' as const, icon: TrendingUp, label: 'Trending' },
-        { category: 'live' as const, icon: Radio, label: 'Live Creators' },
-        { category: 'games' as const, icon: Gamepad2, label: 'Games' },
-        { category: 'sports' as const, icon: Film, label: 'Sports' }
+    const categoryLinks: { category: Category; icon: React.ElementType; label: string }[] = [
+        { category: 'all', icon: Home, label: 'All' },
+        { category: 'trending', icon: TrendingUp, label: 'Trending' },
+        { category: 'live', icon: Radio, label: 'Live Creators' },
+        { category: 'games', icon: Gamepad2, label: 'Games' },
+        { category: 'sports', icon: Film, label: 'Sports' }
     ];
 
     return (
@@ -113,17 +113,11 @@ const VideoCard = ({ content, onSelect }: { content: Content, onSelect: (content
     };
 
     return (
-        <button onClick={() => onSelect(content)} className="block group text-left w-full">
+        <button onClick={() => onSelect(content)} className="block group text-left">
             <div className="flex flex-col h-full">
                 <div className="relative aspect-video bg-gray-800 rounded-2xl overflow-hidden border-2 border-transparent group-hover:border-emerald-500 transition-all duration-300 transform group-hover:scale-105">
                     {content.thumbnailUrl ? (
-                        <Image 
-                            src={content.thumbnailUrl} 
-                            alt={content.title} 
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        />
+                        <img src={content.thumbnailUrl} alt={content.title} className="w-full h-full object-cover" />
                     ) : (
                         <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-800"></div>
                     )}
@@ -162,6 +156,19 @@ const VideoCard = ({ content, onSelect }: { content: Content, onSelect: (content
 const PlayerView = ({ video, upNext, onSelectVideo, onBack }: { video: Content, upNext: Content[], onSelectVideo: (video: Content) => void, onBack: () => void }) => {
     const [copied, setCopied] = useState(false);
 
+    useEffect(() => {
+        if (video && video.id && video.type === 'vod') {
+            const incrementView = async () => {
+                try {
+                    await fetch(`/api/videos/${video.id}`, { method: 'POST' });
+                } catch (error) {
+                    console.error("Failed to update view count:", error);
+                }
+            };
+            incrementView();
+        }
+    }, [video]);
+
     const handleShare = () => {
         const shareUrl = `${window.location.origin}/watch?v=${video.id}`;
         navigator.clipboard.writeText(shareUrl);
@@ -197,11 +204,7 @@ const PlayerView = ({ video, upNext, onSelectVideo, onBack }: { video: Content, 
                                     {copied ? <><Check size={16}/> Copied!</> : <><Share2 size={16}/> Share</>}
                                 </button>
                             </div>
-                            {video.description && (
-                                <div className="prose prose-invert max-w-none mb-6">
-                                    <p className="text-gray-300 leading-relaxed text-lg">{video.description}</p>
-                                </div>
-                            )}
+                            <div className="prose prose-invert max-w-none mb-6"><p className="text-gray-300 leading-relaxed text-lg">{video.description}</p></div>
                             
                             {video.tags && video.tags.length > 0 && (
                                 <div className="border-t border-white/10 pt-6">
@@ -239,13 +242,7 @@ const VideoListItem = ({ video, onSelect }: { video: Content, onSelect: () => vo
     <button onClick={onSelect} className="w-full text-left group relative flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all duration-300 hover:bg-white/10 border border-transparent hover:border-white/10">
         <div className="relative w-32 h-20 bg-black rounded-xl overflow-hidden shrink-0 border border-white/10">
             {video.thumbnailUrl ? (
-                <Image 
-                    src={video.thumbnailUrl} 
-                    alt={video.title} 
-                    fill
-                    className="object-cover"
-                    sizes="128px"
-                />
+                <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover"/>
             ) : (
                  <PlayCircle className={`absolute inset-0 m-auto w-8 h-8 text-gray-500 group-hover:text-white transition-all duration-300 z-10`} />
             )}
@@ -259,59 +256,13 @@ const VideoListItem = ({ video, onSelect }: { video: Content, onSelect: () => vo
 
 
 // --- Main Content Grid ---
-const ContentGrid = ({ onVideoSelect }: { onVideoSelect: (content: Content) => void }) => {
-    const { user, loading, isAdmin } = useAuth();
-    const [videos, setVideos] = useState<Video[]>([]);
-    const [liveStreams, setLiveStreams] = useState<LiveStream[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+const ContentGrid = ({ onVideoSelect, allContent, isLoading }: { onVideoSelect: (content: Content) => void, allContent: Content[], isLoading: boolean }) => {
+    const { isAdmin } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeCategory, setActiveCategory] = useState<'all' | 'trending' | 'live' | 'games' | 'sports'>('all');
+    const [activeCategory, setActiveCategory] = useState<Category>('all');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
-    useEffect(() => {
-        if (!loading) {
-            const fetchContent = async () => {
-                setIsLoading(true);
-                try {
-                    // REMOVED visibility filter - fetch all videos
-                    const videosQuery = query(collection(db, 'videos'), orderBy('createdAt', 'desc'));
-                    const videosSnapshot = await getDocs(videosQuery);
-                    const fetchedVideos = videosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Video));
-                    setVideos(fetchedVideos);
-
-                    const streamsQuery = query(collection(db, 'users'), where('isStreaming', '==', true));
-                    const streamsSnapshot = await getDocs(streamsQuery);
-                    const fetchedStreams = streamsSnapshot.docs.map(doc => doc.data() as LiveStream);
-                    setLiveStreams(fetchedStreams);
-
-                } catch (error) {
-                    console.error("Failed to fetch content:", error);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            fetchContent();
-        }
-    }, [user, loading]);
-
-    const allContent = useMemo((): Content[] => {
-        const mappedVideos: Content[] = videos.map(v => ({
-            id: v.id, type: 'vod', title: v.title, category: v.category,
-            createdAt: v.createdAt.toDate(), authorName: v.authorName,
-            authorPhotoURL: v.authorPhotoURL, views: v.views,
-            linkUrl: `/watch?v=${v.id}`, videoUrl: v.videoUrl, description: v.description,
-            thumbnailUrl: v.thumbnailUrl, tags: v.tags, duration: v.duration
-        }));
-        const mappedStreams: Content[] = liveStreams.map(s => ({
-            id: s.firebaseId, type: 'live', title: `${s.displayName} is Live!`, category: 'live',
-            authorName: s.displayName, authorPhotoURL: s.photoURL, views: s.views,
-            linkUrl: `/watch/${s.streamKey}`, streamKey: s.streamKey,
-            videoUrl: `YOUR_LIVE_STREAM_URL_PREFIX/${s.streamKey}` 
-        }));
-        return [...mappedVideos, ...mappedStreams];
-    }, [videos, liveStreams]);
 
     const filteredContent = useMemo(() => {
         let content = [...allContent];
@@ -388,11 +339,18 @@ const ContentGrid = ({ onVideoSelect }: { onVideoSelect: (content: Content) => v
 const WatchContent = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { user, loading } = useAuth();
+
     const [selectedVideo, setSelectedVideo] = useState<Content | null>(null);
     const [allContent, setAllContent] = useState<Content[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const handleSelectVideo = (content: Content) => {
-        setSelectedVideo(content);
+        const updatedContent = { ...content, views: (content.views || 0) + 1 };
+        setSelectedVideo(updatedContent);
+        
+        setAllContent(prevContent => prevContent.map(c => c.id === content.id ? updatedContent : c));
+
         router.push(`/watch?v=${content.id}`);
     };
 
@@ -401,35 +359,44 @@ const WatchContent = () => {
         router.push('/watch');
     };
     
-    // Fetch all content once to have it available for the player view
     useEffect(() => {
-        const fetchAllContent = async () => {
-             // REMOVED visibility filter - fetch all videos
-             const videosQuery = query(collection(db, 'videos'), orderBy('createdAt', 'desc'));
-             const videosSnapshot = await getDocs(videosQuery);
-             const fetchedVideos = videosSnapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    type: 'vod',
-                    title: data.title,
-                    category: data.category,
-                    createdAt: (data.createdAt as Timestamp).toDate(),
-                    authorName: data.authorName,
-                    authorPhotoURL: data.authorPhotoURL,
-                    views: data.views,
-                    linkUrl: `/watch?v=${doc.id}`,
-                    videoUrl: data.videoUrl,
-                    description: data.description,
-                    thumbnailUrl: data.thumbnailUrl,
-                    tags: data.tags,
-                    duration: data.duration
-                } as Content;
-             });
-             setAllContent(fetchedVideos);
-        };
-        fetchAllContent();
-    }, []);
+        if (!loading) {
+            const fetchAllContent = async () => {
+                 setIsLoading(true);
+                 try {
+                     const videosQuery = query(collection(db, 'videos'), where('visibility', '==', 'public'));
+                     const videosSnapshot = await getDocs(videosQuery);
+                     const fetchedVideos = videosSnapshot.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            type: 'vod',
+                            title: data.title,
+                            category: data.category,
+                            createdAt: (data.createdAt as Timestamp).toDate(),
+                            authorName: data.authorName,
+                            authorPhotoURL: data.authorPhotoURL,
+                            views: data.views,
+                            linkUrl: `/watch?v=${doc.id}`,
+                            videoUrl: data.videoUrl,
+                            description: data.description,
+                            thumbnailUrl: data.thumbnailUrl,
+                            tags: data.tags,
+                            duration: data.duration
+                        } as Content;
+                     });
+                     
+                     setAllContent(fetchedVideos);
+
+                 } catch (error) {
+                     console.error("Failed to fetch content:", error);
+                 } finally {
+                     setIsLoading(false);
+                 }
+            };
+            fetchAllContent();
+        }
+    }, [user, loading]);
 
     useEffect(() => {
         const videoId = searchParams.get('v');
@@ -461,7 +428,11 @@ const WatchContent = () => {
                             onBack={handleClearVideo}
                         />
                     ) : (
-                        <ContentGrid onVideoSelect={handleSelectVideo} />
+                        <ContentGrid 
+                            onVideoSelect={handleSelectVideo} 
+                            allContent={allContent}
+                            isLoading={isLoading}
+                        />
                     )}
                 </div>
             </main>

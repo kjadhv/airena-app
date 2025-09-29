@@ -217,13 +217,13 @@ const UploadForm = () => {
                              <button type="button" onClick={() => setVisibility('private')} className={`flex-1 p-4 rounded-lg border-2 transition-all ${visibility === 'private' ? 'bg-emerald-500/20 border-emerald-500' : 'bg-gray-800 border-gray-700 hover:border-gray-500'}`}>Private</button>
                         </div>
                     </div>
-                     <div className="space-y-2">
+                     {/* <div className="space-y-2">
                         <label className="text-lg font-semibold text-gray-300 flex items-center gap-2"><Shield size={20}/> Audience</label>
                         <div className="flex gap-4">
                               <button type="button" onClick={() => setAudience('all')} className={`flex-1 p-4 rounded-lg border-2 transition-all ${audience === 'all' ? 'bg-emerald-500/20 border-emerald-500' : 'bg-gray-800 border-gray-700 hover:border-gray-500'}`}>Not made for kids</button>
                              <button type="button" onClick={() => setAudience('kids')} className={`flex-1 p-4 rounded-lg border-2 transition-all ${audience === 'kids' ? 'bg-emerald-500/20 border-emerald-500' : 'bg-gray-800 border-gray-700 hover:border-gray-500'}`}>Made for kids</button>
                         </div>
-                    </div>
+                    </div> */}
                 </div>
                 
                 {isSubmitting && (
