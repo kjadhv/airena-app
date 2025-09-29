@@ -9,7 +9,7 @@ import Footer from '@/app/components/Footer';
 import BlogCard from '@/app/components/BlogCard';
 import { useAuth } from '@/app/context/AuthContext';
 import AdBanner from '../components/AdBanner';
-import { PenSquare, Sparkles, AlertTriangle, BookOpen, Star, Clock, TrendingUp } from 'lucide-react';
+import { PenSquare, Sparkles, AlertTriangle, BookOpen, Star, Clock, TrendingUp, Calendar, User, ArrowRight, Tag } from 'lucide-react';
 
 interface Post {
     id: string;
@@ -81,24 +81,19 @@ const BlogPage = () => {
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800">
-                {/* Animated background elements */}
                 <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl animate-pulse" />
+                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl animate-pulse" />
                     <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}} />
-                    <div className="absolute top-3/4 left-1/3 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '4s'}} />
                 </div>
                 
                 <Header />
                 <div className="relative h-screen flex items-center justify-center">
                     <div className="text-center">
                         <div className="relative mb-8">
-                            <div className="w-20 h-20 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto" />
-                            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-cyan-400 rounded-full animate-spin mx-auto" style={{animationDelay: '0.3s'}} />
+                            <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto" />
                         </div>
-                        <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
-                            Loading Stories
-                        </h2>
-                        <p className="text-gray-400">Discovering amazing content for you...</p>
+                        <h2 className="text-2xl font-bold text-white mb-2">Loading Stories</h2>
+                        <p className="text-gray-400 text-sm">Just a moment...</p>
                     </div>
                 </div>
                 <Footer />
@@ -109,26 +104,17 @@ const BlogPage = () => {
     if (error) {
        return (
             <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800">
-                {/* Animated background elements */}
                 <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-red-500/5 rounded-full blur-3xl animate-pulse" />
-                    <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}} />
+                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-3xl animate-pulse" />
                 </div>
                 
                 <Header />
-                <div className="relative h-screen flex items-center justify-center">
-                    <div className="text-center max-w-md mx-auto">
-                        <div className="relative group">
-                            <div className="bg-white/5 backdrop-blur-md border border-red-500/30 rounded-3xl p-12 shadow-2xl">
-                                <div className="w-20 h-20 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/30">
-                                    <AlertTriangle className="w-10 h-10 text-red-400" />
-                                </div>
-                                <h2 className="text-2xl font-bold bg-gradient-to-r from-red-300 to-red-500 bg-clip-text text-transparent mb-4">
-                                    Something went wrong
-                                </h2>
-                                <p className="text-gray-300 leading-relaxed">{error}</p>
-                            </div>
-                            <div className="absolute -inset-1 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-3xl blur opacity-50 group-hover:opacity-75 transition-opacity duration-500 -z-10" />
+                <div className="relative h-screen flex items-center justify-center px-4">
+                    <div className="text-center max-w-md">
+                        <div className="bg-red-500/10 backdrop-blur-sm border border-red-500/20 rounded-2xl p-8">
+                            <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                            <h2 className="text-xl font-bold text-red-300 mb-2">Something went wrong</h2>
+                            <p className="text-gray-300 text-sm">{error}</p>
                         </div>
                     </div>
                 </div>
@@ -142,155 +128,230 @@ const BlogPage = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800">
-            {/* Animated background elements */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}} />
-                <div className="absolute top-3/4 left-1/3 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '4s'}} />
-                <div className="absolute top-1/2 right-1/3 w-32 h-32 bg-pink-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '6s'}} />
+            {/* Subtle animated background */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-40">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '3s'}} />
             </div>
 
             <Header />
             
-            <main className="relative pt-32 pb-16">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    {/* Hero Section */}
-                    <div className="text-center md:text-left mb-16 flex flex-col md:flex-row justify-between items-center">
-                        <div className="mb-8 md:mb-0">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-3 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-2xl border border-emerald-500/30">
-                                    <BookOpen className="w-8 h-8 text-emerald-400" />
+            <main className="relative pt-24 pb-20">
+                {/* Hero Section */}
+                <div className="border-b border-gray-800/50 bg-gradient-to-b from-gray-900/50 to-transparent">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div className="max-w-3xl">
+                                {/* Badge */}
+                                <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-3">
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">Stories & Insights</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
-                                    <span className="text-sm font-medium text-emerald-400 uppercase tracking-wider">Stories & Insights</span>
+                                
+                                {/* Title */}
+                                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-white via-emerald-200 to-cyan-300 bg-clip-text text-transparent mb-3">
+                                    Airena Blog
+                                </h1>
+                                
+                                {/* Description */}
+                                <p className="text-base text-gray-400 leading-relaxed mb-4">
+                                    Latest news, updates, and inspiring stories from our gaming community.
+                                </p>
+                                
+                                {/* Stats */}
+                                <div className="flex flex-wrap items-center gap-4 text-sm">
+                                    <div className="flex items-center gap-2 text-gray-400">
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                                        </div>
+                                        <span><span className="text-white font-semibold">{posts.length}</span> Stories</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-gray-400">
+                                        <div className="w-7 h-7 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                                            <Star className="w-3.5 h-3.5 text-yellow-400" />
+                                        </div>
+                                        <span><span className="text-white font-semibold">{posts.filter(p => p.isFeatured).length}</span> Featured</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-gray-400">
+                                        <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                                            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                                        </div>
+                                        <span>Updated Daily</span>
+                                    </div>
                                 </div>
                             </div>
-                            <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-white via-emerald-200 to-cyan-300 bg-clip-text text-transparent mb-4">
-                                Airena Blog
-                            </h1>
-                            <p className="text-xl text-gray-300 max-w-2xl leading-relaxed">
-                                Discover the latest news, updates, and inspiring stories from our vibrant gaming and sports community.
-                            </p>
                             
-                            {/* Stats */}
-                            <div className="flex items-center gap-8 mt-6">
-                                <div className="flex items-center gap-2 text-gray-400">
-                                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                                    <span className="text-sm">{posts.length} Stories</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-gray-400">
-                                    <Star className="w-5 h-5 text-yellow-400" />
-                                    <span className="text-sm">{posts.filter(p => p.isFeatured).length} Featured</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-gray-400">
-                                    <Clock className="w-5 h-5 text-cyan-400" />
-                                    <span className="text-sm">Updated Daily</span>
-                                </div>
-                            </div>
+                            {isAdmin && (
+                                <Link 
+                                    href="/blogs/new" 
+                                    className="group relative bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-5 py-2.5 rounded-xl font-medium hover:from-emerald-400 hover:to-cyan-400 transition-all duration-300 flex items-center gap-2 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-105 whitespace-nowrap text-sm"
+                                >
+                                    <PenSquare size={16} className="group-hover:rotate-12 transition-transform duration-300" /> 
+                                    Write a Story
+                                </Link>
+                            )}
                         </div>
-                        
-                        {isAdmin && (
-                            <Link 
-                                href="/blogs/new" 
-                                className="group relative bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-2xl font-semibold hover:from-emerald-400 hover:to-cyan-400 transition-all duration-300 flex items-center gap-3 shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-105"
-                            >
-                                <PenSquare size={20} className="group-hover:rotate-12 transition-transform duration-300" /> 
-                                Write a Story
-                                <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-300 -z-10" />
-                            </Link>
-                        )}
                     </div>
+                </div>
 
-                    {/* Top Ad - After Hero Section */}
-                    <div className="flex justify-center mb-12">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
+                    {/* Top Ad */}
+                    <div className="flex justify-center mb-16">
                         <AdBanner adSlot="4538040333" adFormat="horizontal" className="w-full max-w-4xl" />
                     </div>
 
                     {posts.length === 0 ? (
-                        <div className="text-center py-24">
-                            <div className="relative inline-block mb-8">
-                                <div className="w-32 h-32 bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl flex items-center justify-center border border-white/10">
-                                    <BookOpen className="w-16 h-16 text-gray-500" />
-                                </div>
-                                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-3xl blur-xl" />
+                        <div className="text-center py-32">
+                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 mb-6">
+                                <BookOpen className="w-10 h-10 text-gray-500" />
                             </div>
-                            <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-300 to-gray-500 bg-clip-text text-transparent mb-4">
-                                No Stories Yet
-                            </h2>
-                            <p className="text-gray-400 max-w-md mx-auto mb-8 leading-relaxed">
-                                Be the first to share an amazing story with our community! Your voice matters.
+                            <h2 className="text-3xl font-bold text-white mb-3">No Stories Yet</h2>
+                            <p className="text-gray-400 max-w-md mx-auto mb-8">
+                                Be the first to share an amazing story with our community!
                             </p>
                             {isAdmin && (
                                 <Link 
                                     href="/blogs/new" 
-                                    className="group inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-2xl font-semibold hover:from-emerald-400 hover:to-cyan-400 transition-all duration-300 shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-105"
+                                    className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-medium hover:from-emerald-400 hover:to-cyan-400 transition-all duration-300 shadow-lg"
                                 >
-                                    <PenSquare size={20} className="group-hover:rotate-12 transition-transform duration-300" />
+                                    <PenSquare size={18} />
                                     Write the First Story
                                 </Link>
                             )}
                         </div>
                     ) : (
-                        <div className="space-y-20">
+                        <div className="space-y-16">
+                            {/* Featured Story */}
                             {topStory && (
                                 <section>
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-xl border border-yellow-500/30">
-                                                <Star className="w-6 h-6 text-yellow-400" />
-                                            </div>
-                                            <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                                Featured Story
-                                            </h2>
+                                    <div className="flex items-center gap-3 mb-8">
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-lg border border-yellow-500/20">
+                                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                                            <span className="text-sm font-semibold text-yellow-300">Featured Story</span>
                                         </div>
-                                        <div className="flex-1 h-px bg-gradient-to-r from-yellow-500/50 to-transparent" />
-                                        <div className="px-4 py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-full">
-                                            <span className="text-sm font-medium text-yellow-300">Must Read</span>
-                                        </div>
+                                        <div className="flex-1 h-px bg-gradient-to-r from-yellow-500/30 to-transparent"></div>
                                     </div>
                                     
-                                    <div className="relative group">
-                                        <BlogCard post={topStory} onDelete={setDeleteConfirm} isLarge />
-                                        <div className="absolute -inset-1 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 rounded-3xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
-                                    </div>
+                                    <Link href={`/blogs/${topStory.slug}`} className="group block">
+                                        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 hover:border-emerald-500/30 transition-all duration-500">
+                                            {topStory.imageUrl && (
+                                                <div className="relative h-96 overflow-hidden">
+                                                    <img 
+                                                        src={topStory.imageUrl} 
+                                                        alt={topStory.title}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent"></div>
+                                                    <div className="absolute top-4 right-4 px-3 py-1 bg-yellow-500/90 backdrop-blur-sm rounded-full">
+                                                        <span className="text-xs font-bold text-gray-900">FEATURED</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="p-8">
+                                                <div className="flex items-center gap-4 text-sm text-gray-400 mb-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <User className="w-4 h-4" />
+                                                        <span>{topStory.authorName}</span>
+                                                    </div>
+                                                    <span>•</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <Calendar className="w-4 h-4" />
+                                                        <span>{topStory.createdAt}</span>
+                                                    </div>
+                                                </div>
+                                                <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 group-hover:text-emerald-400 transition-colors duration-300">
+                                                    {topStory.title}
+                                                </h2>
+                                                <p className="text-gray-400 leading-relaxed mb-6">
+                                                    {topStory.excerpt}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-emerald-400 font-medium group-hover:gap-4 transition-all duration-300">
+                                                    <span>Read Story</span>
+                                                    <ArrowRight className="w-5 h-5" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Link>
+
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => setDeleteConfirm(topStory.id)}
+                                            className="mt-4 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                                        >
+                                            Delete Post
+                                        </button>
+                                    )}
                                 </section>
                             )}
 
-                            {/* Middle Ad - Between Featured and Latest Stories */}
+                            {/* Middle Ad */}
                             {topStory && otherStories.length > 0 && (
-                                <div className="flex justify-center">
+                                <div className="flex justify-center py-8">
                                     <AdBanner adSlot="1234567890" adFormat="rectangle" className="mx-auto" />
                                 </div>
                             )}
                             
+                            {/* Latest Stories Grid */}
                             {otherStories.length > 0 && (
                                 <section>
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 rounded-xl border border-emerald-500/30">
-                                                <TrendingUp className="w-6 h-6 text-emerald-400" />
-                                            </div>
-                                            <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                                Latest Stories
-                                            </h2>
+                                    <div className="flex items-center gap-3 mb-8">
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 rounded-lg border border-emerald-500/20">
+                                            <TrendingUp className="w-4 h-4 text-emerald-400" />
+                                            <span className="text-sm font-semibold text-emerald-300">Latest Stories</span>
                                         </div>
-                                        <div className="flex-1 h-px bg-gradient-to-r from-emerald-500/50 to-transparent" />
-                                        <div className="px-4 py-2 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-full">
-                                            <span className="text-sm font-medium text-emerald-300">{otherStories.length} Stories</span>
-                                        </div>
+                                        <div className="flex-1 h-px bg-gradient-to-r from-emerald-500/30 to-transparent"></div>
+                                        <span className="text-sm text-gray-500">{otherStories.length} {otherStories.length === 1 ? 'Story' : 'Stories'}</span>
                                     </div>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                         {otherStories.map((post, index) => (
                                             <React.Fragment key={post.id}>
-                                                <div className="relative group">
-                                                    <BlogCard post={post} onDelete={setDeleteConfirm} />
-                                                    <div 
-                                                        className="absolute -inset-1 bg-gradient-to-r from-emerald-500/5 to-cyan-500/5 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"
-                                                        style={{animationDelay: `${index * 0.1}s`}}
-                                                    />
-                                                </div>
+                                                <Link href={`/blogs/${post.slug}`} className="group block">
+                                                    <article className="h-full rounded-xl bg-gradient-to-br from-gray-800/30 to-gray-900/30 border border-gray-700/50 hover:border-emerald-500/30 overflow-hidden transition-all duration-500 hover:shadow-xl hover:shadow-emerald-500/10">
+                                                        {post.imageUrl && (
+                                                            <div className="relative h-48 overflow-hidden">
+                                                                <img 
+                                                                    src={post.imageUrl} 
+                                                                    alt={post.title}
+                                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                                />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent"></div>
+                                                            </div>
+                                                        )}
+                                                        <div className="p-6">
+                                                            <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                                                                <span className="flex items-center gap-1">
+                                                                    <User className="w-3 h-3" />
+                                                                    {post.authorName}
+                                                                </span>
+                                                                <span>•</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <Calendar className="w-3 h-3" />
+                                                                    {post.createdAt}
+                                                                </span>
+                                                            </div>
+                                                            <h3 className="text-xl font-bold text-white mb-3 group-hover:text-emerald-400 transition-colors line-clamp-2">
+                                                                {post.title}
+                                                            </h3>
+                                                            <p className="text-sm text-gray-400 leading-relaxed line-clamp-3 mb-4">
+                                                                {post.excerpt}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 text-sm text-emerald-400 font-medium">
+                                                                <span>Read More</span>
+                                                                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                                            </div>
+                                                        </div>
+                                                    </article>
+                                                </Link>
+                                                
+                                                {isAdmin && (
+                                                    <button
+                                                        onClick={() => setDeleteConfirm(post.id)}
+                                                        className="px-3 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                )}
                                                 
                                                 {/* Ad after every 6 posts */}
                                                 {(index + 1) % 6 === 0 && index < otherStories.length - 1 && (
@@ -308,9 +369,9 @@ const BlogPage = () => {
                                 </section>
                             )}
 
-                            {/* Bottom Ad - After all stories */}
+                            {/* Bottom Ad */}
                             {posts.length >= 3 && (
-                                <div className="flex justify-center mt-16">
+                                <div className="flex justify-center pt-8">
                                     <AdBanner adSlot="9876543210" adFormat="horizontal" className="w-full max-w-4xl" />
                                 </div>
                             )}
@@ -319,37 +380,34 @@ const BlogPage = () => {
                 </div>
             </main>
             
-            {/* Enhanced Delete Confirmation Modal */}
+            {/* Delete Confirmation Modal */}
             {deleteConfirm && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
-                    <div className="relative group">
-                        <div className="bg-white/5 backdrop-blur-md border border-white/20 rounded-3xl p-8 max-w-md w-full shadow-2xl">
-                            <div className="text-center mb-6">
-                                <div className="w-16 h-16 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
-                                    <AlertTriangle className="w-8 h-8 text-red-400" />
-                                </div>
-                                <h3 className="text-2xl font-bold text-white mb-2">Delete Story</h3>
-                                <p className="text-gray-300 leading-relaxed">
-                                    Are you sure you want to delete this story? This action cannot be undone and will permanently remove the content.
-                                </p>
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                        <div className="text-center mb-6">
+                            <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangle className="w-7 h-7 text-red-400" />
                             </div>
-                            
-                            <div className="flex gap-4">
-                                <button 
-                                    onClick={() => setDeleteConfirm(null)} 
-                                    className="flex-1 px-6 py-3 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-xl font-medium transition-all duration-300 border border-white/20 hover:border-white/30"
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    onClick={() => handleDeletePost(deleteConfirm)} 
-                                    className="flex-1 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 text-white rounded-xl font-medium transition-all duration-300 shadow-lg shadow-red-500/25 hover:shadow-red-500/40"
-                                >
-                                    Delete Forever
-                                </button>
-                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">Delete Story?</h3>
+                            <p className="text-gray-400 text-sm">
+                                This action cannot be undone. The story will be permanently removed.
+                            </p>
                         </div>
-                        <div className="absolute -inset-1 bg-gradient-to-r from-red-500/10 to-red-600/10 rounded-3xl blur opacity-50 group-hover:opacity-75 transition-opacity duration-500 -z-10" />
+                        
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setDeleteConfirm(null)} 
+                                className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => handleDeletePost(deleteConfirm)} 
+                                className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
