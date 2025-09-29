@@ -1,42 +1,39 @@
-// app/api/videos/user/[userId]/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { db, authAdmin } from "@/app/firebase/firebaseAdmin";
+import { NextRequest, NextResponse } from 'next/server';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '@/app/firebase/config';
 
 export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  request: NextRequest,
+  context: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = await params;
-    const idToken = req.headers.get("Authorization")?.split("Bearer ")[1];
+    const { userId } = await context.params;
 
-    if (!idToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decodedToken = await authAdmin.verifyIdToken(idToken);
-
-    // CRITICAL SECURITY CHECK: A user can only fetch their own videos.
-    if (decodedToken.uid !== userId) {
+    if (!userId) {
       return NextResponse.json(
-        { error: "Forbidden: You can only access your own content." },
-        { status: 403 }
+        { error: 'User ID is required' },
+        { status: 400 }
       );
     }
 
-    // Fetch all videos for this user
-    const videosRef = db.collection("videos");
-    const q = videosRef.where("authorId", "==", userId).orderBy("createdAt", "desc");
-    const snapshot = await q.get();
+    const videosQuery = query(
+      collection(db, 'videos'),
+      where('authorId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
 
-    if (snapshot.empty) {
-      return NextResponse.json([], { status: 200 });
-    }
+    const videosSnapshot = await getDocs(videosQuery);
+    const videos = videosSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
-    const videos = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    return NextResponse.json(videos, { status: 200 });
-  } catch (error: unknown) {
-    console.error("API Error fetching user videos:", (error as Error).message);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ videos }, { status: 200 });
+  } catch (error) {
+    console.error('Error fetching user videos:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch videos' },
+      { status: 500 }
+    );
   }
 }

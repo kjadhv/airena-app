@@ -8,7 +8,9 @@ import { BullModule } from '@nestjs/bullmq';
 import { NmsModule } from './nms/nms.module';
 import { StreamModule } from './stream/stream.module';
 import { MetricsModule } from './metrics/metric.module';
-import { QueueModule } from './queue/queue.module'; // <-- 1. Import new QueueModule
+import { QueueModule } from './queue/queue.module';
+import { VideoModule } from './video/video.module'; // Add VideoModule
+import { FirebaseModule } from './firebase/firebase.module'; // Add FirebaseModule
 
 @Module({
   imports: [
@@ -22,7 +24,7 @@ import { QueueModule } from './queue/queue.module'; // <-- 1. Import new QueueMo
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
-        autoLoadEntities: true, // <-- 2. More maintainable than listing entities manually
+        autoLoadEntities: true,
         synchronize: true, // For development only. Use migrations in production.
       }),
     }),
@@ -43,7 +45,9 @@ import { QueueModule } from './queue/queue.module'; // <-- 1. Import new QueueMo
     StreamModule,
     MetricsModule,
     NmsModule,
-    QueueModule, // <-- 3. Add the new module here
+    QueueModule,
+    VideoModule, // Add VideoModule
+    FirebaseModule, // Add FirebaseModule
   ],
 })
 export class AppModule {}

@@ -13,6 +13,7 @@ import * as path from 'path';
 export class NmsService implements OnModuleInit {
   private nms!: NodeMediaServer;
   private readonly logger = new Logger(NmsService.name);
+  private streamSessions = new Map<string, string>(); // Map session ID to original stream key
 
   constructor(
     @InjectQueue('video-processing') private readonly videoQueue: Queue,
@@ -33,30 +34,14 @@ export class NmsService implements OnModuleInit {
       fs.mkdirSync(mediaRoot, { recursive: true });
     }
 
+    const liveDir = path.join(mediaRoot, 'live');
+    if (!fs.existsSync(liveDir)) {
+      fs.mkdirSync(liveDir, { recursive: true });
+    }
+
     const config = {
       rtmp: { port: 1935, chunk_size: 60000, gop_cache: true, ping: 30, ping_timeout: 60 },
       http: { port: 8000, mediaroot: mediaRoot, allow_origin: '*' },
-  fission: {
-        ffmpeg: ffmpegPath,
-        tasks: [
-          {
-            rule: 'live/*',
-            // This model tells FFmpeg to copy the video and audio streams
-            // without re-encoding, and save it as an .flv file.
-            model: [
-              {
-                ab: '128k', // Audio bitrate (required by the type, but ignored by -c:a copy)
-                vb: '2000k', // Video bitrate (required by the type, but ignored by -c:v copy)
-                vs: '1280x720', // Video size (required by the type)
-                vf: '30',      // Video framerate (required by the type)
-                // The actual command to execute:
-                cmd: 'ffmpeg',
-                args: ['-i', '-', '-c:v', 'copy', '-c:a', 'copy', '-f', 'flv', '{path}'],
-              },
-            ],
-          },
-        ],
-      },
       auth: { api: true, api_user: 'admin', api_pass: 'admin' },
     };
 
@@ -65,39 +50,104 @@ export class NmsService implements OnModuleInit {
     this.nms.run();
   }
 
+  private extractBaseStreamKey(streamPath: string): string {
+    const fullKey = streamPath.split('/').pop() || '';
+    return fullKey.replace(/_\d+p?$/i, '');
+  }
+
   private setupStreamEvents(mediaRoot: string) {
     this.nms.on('prePublish', async (id, StreamPath, args) => {
-      const streamKey = StreamPath.split('/').pop();
-      const session = this.nms.getSession(id);
-      if (!streamKey) {
+      this.logger.log(`[AUTH] Checking stream: ${StreamPath} (Session ID: ${id})`);
+      
+      const fullStreamKey = StreamPath.split('/').pop();
+      const baseStreamKey = this.extractBaseStreamKey(StreamPath);
+      
+      if (!baseStreamKey) {
         this.logger.warn(`[AUTH] REJECTED stream with invalid path: ${StreamPath}`);
+        const session = this.nms.getSession(id);
         return (session as any).reject();
       }
-      const stream = await this.streamService.getStreamByKey(streamKey);
+
+      this.streamSessions.set(id, baseStreamKey);
+      
+      this.logger.log(`[AUTH] Full key: ${fullStreamKey}, Base key: ${baseStreamKey}`);
+      
+      const stream = await this.streamService.getStreamByKey(baseStreamKey);
       if (!stream) {
-        this.logger.warn(`[AUTH] REJECTED stream key: ${streamKey}. Key not found.`);
+        this.logger.warn(`[AUTH] REJECTED stream key: ${baseStreamKey}. Key not found in database.`);
+        const session = this.nms.getSession(id);
         (session as any).reject();
       } else {
-        this.logger.log(`[AUTH] ACCEPTED stream key: ${streamKey}.`);
-        await this.streamService.updateStreamStatus(streamKey, true);
+        this.logger.log(`[AUTH] ACCEPTED stream key: ${baseStreamKey}`);
+        await this.streamService.updateStreamStatus(baseStreamKey, true);
       }
     });
 
     this.nms.on('donePublish', async (id, StreamPath, args) => {
-      const streamKey = StreamPath.split('/').pop();
-      if (!streamKey) return;
-
-      this.logger.log(`[NMS] Stream ended: ${streamKey}. Triggering VOD processing.`);
-      await this.streamService.updateStreamStatus(streamKey, false);
-
-      const rawFilePath = path.join(mediaRoot, 'live', `${streamKey}.flv`);
-
-      if (fs.existsSync(rawFilePath)) {
-        await this.videoQueue.add('transcode-hls', { filePath: rawFilePath, streamKey: streamKey });
-        this.logger.log(`[QUEUE] Added job for stream key: ${streamKey}`);
-      } else {
-        this.logger.error(`[NMS] Raw stream file not found for ${streamKey} at ${rawFilePath}`);
+      this.logger.log(`[NMS] Stream ended: ${StreamPath} (Session ID: ${id})`);
+      
+      const baseStreamKey = this.streamSessions.get(id);
+      if (!baseStreamKey) {
+        this.logger.warn(`[NMS] No stream key found for session ${id}`);
+        return;
       }
+
+      this.streamSessions.delete(id);
+      await this.streamService.updateStreamStatus(baseStreamKey, false);
+
+      const fullStreamKey = StreamPath.split('/').pop();
+      const possiblePaths = [
+        path.join(mediaRoot, 'live', `${fullStreamKey}.flv`),
+        path.join(mediaRoot, 'live', `${baseStreamKey}.flv`),
+        path.join(mediaRoot, `${fullStreamKey}.flv`),
+        path.join(mediaRoot, `${baseStreamKey}.flv`)
+      ];
+
+      let rawFilePath: string | null = null;
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          rawFilePath = possiblePath;
+          this.logger.log(`[NMS] Found stream file at: ${rawFilePath}`);
+          break;
+        }
+      }
+
+      if (rawFilePath) {
+        try {
+          await this.videoQueue.add('transcode-hls', { 
+            filePath: rawFilePath, 
+            streamKey: baseStreamKey 
+          });
+          this.logger.log(`[QUEUE] Added transcoding job for stream key: ${baseStreamKey}`);
+        } catch (error) {
+          // FIX: Check if 'error' is an instance of Error before using its properties
+          if (error instanceof Error) {
+            this.logger.error(`[QUEUE] Failed to add job: ${error.message}`);
+          } else {
+            this.logger.error(`[QUEUE] Failed to add job with unknown error: ${error}`);
+          }
+        }
+      } else {
+        this.logger.error(`[NMS] Raw stream file not found for ${baseStreamKey}. Checked paths:`);
+        possiblePaths.forEach(p => this.logger.error(`  - ${p}`));
+        
+        this.logger.debug('[NMS] Files in media directory:');
+        try {
+          const files = fs.readdirSync(mediaRoot, { recursive: true });
+          files.forEach(file => this.logger.debug(`  - ${file}`));
+        } catch (error) {
+          // FIX: Check if 'error' is an instance of Error before using its properties
+          if (error instanceof Error) {
+            this.logger.error(`[NMS] Could not list media directory: ${error.message}`);
+          } else {
+            this.logger.error(`[NMS] Could not list media directory with unknown error: ${error}`);
+          }
+        }
+      }
+    });
+
+    this.nms.on('postPublish', (id, StreamPath, args) => {
+      this.logger.log(`[NMS] Stream started: ${StreamPath} (Session ID: ${id})`);
     });
   }
 }

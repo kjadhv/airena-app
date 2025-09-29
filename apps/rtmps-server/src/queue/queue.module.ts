@@ -1,21 +1,30 @@
 // apps/rtmps-server/src/queue/queue.module.ts
-
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { VideoProcessor } from './video.processor';
-// We will create these modules next
-// import { VideoModule } from '../video/video.module';
-// import { FirebaseModule } from '../firebase/firebase.module';
+import { FirebaseModule } from '../firebase/firebase.module';
+import { VideoModule } from '../video/video.module';
 
 @Module({
   imports: [
-    // Register the queue again to make it available within this module
-    BullModule.registerQueue({
+    ConfigModule, // Add ConfigModule for ConfigService
+    FirebaseModule, 
+    VideoModule,
+    BullModule.registerQueueAsync({
       name: 'video-processing',
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        connection: {
+          host: configService.get('REDIS_HOST', 'localhost'),
+          port: configService.get('REDIS_PORT', 6379),
+          password: configService.get('REDIS_PASSWORD'),
+        },
+      }),
+      inject: [ConfigService],
     }),
-    // VideoModule, // To get access to VideoService for database updates
-    // FirebaseModule, // To get access to FirebaseService for uploads
   ],
   providers: [VideoProcessor],
+  exports: [BullModule], // Export BullModule so other modules can inject queues
 })
 export class QueueModule {}

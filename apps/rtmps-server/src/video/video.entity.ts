@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from '../stream/user.entity';
 
 export enum VideoStatus {
   PRIVATE = 'private',
@@ -28,6 +29,13 @@ export class Video {
     default: VideoStatus.PRIVATE, // <-- Every new video defaults to private
   })
   status!: VideoStatus;
+
+  @Column({ name: 'uploader_id', nullable: true })
+  uploaderId?: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'uploader_id' })
+  uploader?: User;
 
   @CreateDateColumn()
   createdAt!: Date;

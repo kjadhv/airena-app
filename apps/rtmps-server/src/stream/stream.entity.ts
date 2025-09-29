@@ -1,7 +1,7 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
 
-@Entity('Stream')
+@Entity('streams') // Changed from 'Stream' to 'streams' for consistency
 export class Stream {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -12,22 +12,28 @@ export class Stream {
   @Column()
   streamUrl!: string;
 
-  @Column()
+  @Column({ name: 'user_id' })
   userId!: string;
 
   @ManyToOne(() => User, (user) => user.streams)
+  @JoinColumn({ name: 'user_id' })
   user!: User;
 
   @Column({ default: false })
   isActive!: boolean;
 
   @Column({ nullable: true })
-  title!: string;
+  title?: string;
 
   @Column({ nullable: true })
-  description!: string;
+  description?: string;
 
-  @Column({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  // Fixed: Changed from 'datetime' to 'timestamp' for PostgreSQL compatibility
+  @Column({ 
+    type: 'timestamp', 
+    default: () => 'CURRENT_TIMESTAMP',
+    onUpdate: 'CURRENT_TIMESTAMP'
+  })
   lastActiveAt!: Date;
 
   @CreateDateColumn()
