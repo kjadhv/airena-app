@@ -1,12 +1,15 @@
-// app/api/posts/[postId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { db, authAdmin, storage as adminStorage } from '@/app/firebase/firebaseAdmin';
 import slugify from 'slugify';
 
+interface RouteParams {
+    params: Promise<{ postId: string }>;
+}
+
 // GET: Fetches a single post's data for the edit page
-export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
+export async function GET(req: NextRequest, context: RouteParams) {
     try {
-        const { postId } = await params; // Added await here
+        const { postId } = await context.params;
         const docRef = db.collection('posts').doc(postId);
         const doc = await docRef.get();
 
@@ -15,15 +18,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ post
         }
         return NextResponse.json({ id: doc.id, ...doc.data() }, { status: 200 });
     } catch (error: unknown) {
-        console.error("GET post error:", (error as Error).message);
+        console.error("GET post error:", error instanceof Error ? error.message : 'Unknown error');
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
 // PUT: Updates an existing post
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
+export async function PUT(req: NextRequest, context: RouteParams) {
     try {
-        const { postId } = await params; // Added await here
+        const { postId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -39,11 +42,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
         const postRef = db.collection('posts').doc(postId);
         
         // Define a more specific type for the update object
-        const updateData: { title: string; content: string; isFeatured: boolean; imageUrl?: string } = { 
+        const updateData: { title: string; content: string; isFeatured: boolean; imageUrl?: string, slug?: string } = { 
             title, 
             content, 
             isFeatured 
         };
+
+        // If the title is being changed, update the slug as well
+        if (title) {
+            updateData.slug = slugify(title, { lower: true, strict: true });
+        }
         
         if (image) {
             const bucket = adminStorage.bucket();
@@ -56,18 +64,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ post
         }
 
         await postRef.update(updateData);
-        return NextResponse.json({ message: 'Post updated successfully' }, { status: 200 });
+        return NextResponse.json({ message: 'Post updated successfully', slug: updateData.slug }, { status: 200 });
 
     } catch (error: unknown) {
-        console.error("PUT post error:", (error as Error).message);
+        console.error("PUT post error:", error instanceof Error ? error.message : 'Unknown error');
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
 // DELETE: Deletes a post
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
+export async function DELETE(req: NextRequest, context: RouteParams) {
     try {
-        const { postId } = await params; // Added await here
+        const { postId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -78,7 +86,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ p
         
         return NextResponse.json({ message: 'Post deleted successfully' }, { status: 200 });
     } catch (error: unknown) {
-        console.error("DELETE post error:", (error as Error).message);
+        console.error("DELETE post error:", error instanceof Error ? error.message : 'Unknown error');
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
