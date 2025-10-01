@@ -1,42 +1,40 @@
-// app/blogs/[slug]/page.tsx
-import { db } from "@/app/firebase/firebaseAdmin"; // Use the Admin SDK for Server Components
+import { db } from "@/app/firebase/firebaseAdmin";
 import { notFound } from "next/navigation";
 import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import AppImage from "@/app/components/AppImage";
-// import CommentSection from "@/components/CommentSection"; // This must be a Client Component
-// import ReactionBar from "@/components/ReactionBar";     // This must be a Client Component
 import { Timestamp } from "firebase-admin/firestore";
+import ViewCounter from "@/app/components/ViewCounter"; // <-- Import the new component
+import { Calendar, User, Eye } from "lucide-react";
 
 // Define the shape of the post data
 interface Post {
   id: string;
   title: string;
   authorName: string;
-  createdAt: Date; // Use the standard Date object for easier formatting
+  createdAt: Date;
   imageUrl: string;
   content: string;
+  views?: number; // <-- Added views
 }
 
-// Updated signature for Next.js 15 - params is now a Promise
+// Updated params to be a Promise
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params; // Added await here
+  const { slug } = await params;
 
-  // Fetch the data directly on the server before the page is rendered
   const snapshot = await db
     .collection("posts")
     .where("slug", "==", slug)
-    .limit(1) // Ensure only one document is fetched
+    .limit(1)
     .get();
 
   if (snapshot.empty) {
-    notFound(); // Triggers the built-in 404 page if no post is found
+    notFound();
   }
 
   const doc = snapshot.docs[0];
   const data = doc.data();
   
-  // The toDate() method correctly converts the Firestore Timestamp to a standard Date object
   const createdAtTimestamp = data.createdAt as Timestamp;
   
   const post: Post = {
@@ -46,6 +44,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     createdAt: createdAtTimestamp.toDate(),
     imageUrl: data.imageUrl,
     content: data.content,
+    views: data.views || 0, // <-- Fetch views
   };
 
   return (
@@ -53,7 +52,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <Header />
       <main className="pt-24 pb-16 min-h-screen">
         <article className="container mx-auto px-4 max-w-4xl">
-          {/* Featured Image */}
+          {/* Call the client component to trigger the view count */}
+          <ViewCounter postId={post.id} />
+
           <div className="relative w-full h-64 md:h-96 mb-8 rounded-2xl overflow-hidden shadow-lg shadow-black/20">
             <AppImage
               src={post.imageUrl}
@@ -63,22 +64,30 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             />
           </div>
           
-          {/* Post Metadata */}
-          <div className="text-center mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight text-white">
+          <div className="text-center mb-12">
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight text-white">
               {post.title}
             </h1>
-            <p className="text-md text-gray-400">
-              By {post.authorName} •{" "}
-              {post.createdAt.toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+            <div className="flex items-center justify-center flex-wrap gap-x-6 gap-y-2 text-md text-gray-400">
+                <div className="flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    <span>{post.authorName}</span>
+                </div>
+                 <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    <span>
+                        {post.createdAt.toLocaleDateString("en-US", {
+                          year: "numeric", month: "long", day: "numeric",
+                        })}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4" />
+                    <span>{post.views?.toLocaleString() || '0'} views</span>
+                </div>
+            </div>
           </div>
           
-          {/* Post Content */}
           <div
             className="prose prose-invert prose-lg max-w-none 
                        prose-p:text-gray-300 prose-p:leading-relaxed
@@ -87,10 +96,6 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                        prose-li:text-gray-300"
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
-
-          {/* Interactive Client Components for reactions and comments
-          <ReactionBar postId={post.id} />
-          <CommentSection postId={post.id} /> */}
 
         </article>
       </main>
