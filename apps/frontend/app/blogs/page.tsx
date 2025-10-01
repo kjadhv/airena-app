@@ -6,8 +6,7 @@ import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/fire
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { useAuth } from '@/app/context/AuthContext';
-import AdBanner from '../components/AdBanner';
-import { PenSquare, Trash2, AlertTriangle, BookOpen, Star, TrendingUp, Calendar, User, ArrowRight, Eye, X, Plus } from 'lucide-react';
+import { PenSquare, Trash2, AlertTriangle, BookOpen, Calendar, User, ArrowRight, Eye, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Post {
