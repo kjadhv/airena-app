@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import Header from '@/app/components/Header';
+import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 import { auth } from '@/app/firebase/config';
 import { Star } from 'lucide-react';

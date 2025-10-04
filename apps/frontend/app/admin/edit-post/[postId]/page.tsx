@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import Header from '@/app/components/Header';
+import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 import BlogEditor from '@/app/components/BlogEditor';
 import { Star } from 'lucide-react';

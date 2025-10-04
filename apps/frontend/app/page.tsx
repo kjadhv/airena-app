@@ -1,9 +1,9 @@
 // app/page.tsx
 "use client";
 import React, { useEffect } from 'react';
-import Header from './components/Header';
+// import Header from './components/Header';
 import HeroSection from './components/HeroSection';
-import CategoriesSection from './components/CategoriesSection';
+// import CategoriesSection from './components/CategoriesSection';
 import FeaturedVideoSection from './components/FeaturedVideoSection';
 import BigTournamentSection from './components/BigTournamentSection';
 import FoundersClubSection from './components/FoundersClubSection';
@@ -37,10 +37,10 @@ export default function HomePage() {
                     <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#059669] to-[#34d399] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]"></div>
                 </div>
                 
-                <Header />
+                {/* <Header /> */}
                 <main>
                     <HeroSection />
-                    <CategoriesSection />
+                    {/* <CategoriesSection /> */}
                     <FeaturedVideoSection />
                     <BigTournamentSection />
                     <FoundersClubSection />

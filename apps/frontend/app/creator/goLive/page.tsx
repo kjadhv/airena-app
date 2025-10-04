@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
-import Header from "@/app/components/Header";
+import Header from "@/app/components/Sidebar";
 import Footer from "@/app/components/Footer";
 import { Key, Copy, Check, Eye, XCircle, RefreshCw, ExternalLink, AlertTriangle, EyeOff } from "lucide-react";
 import Link from "next/link";

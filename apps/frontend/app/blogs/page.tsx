@@ -3,7 +3,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
 import { db } from '@/app/firebase/config';
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
-import Header from '@/app/components/Header';
+import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 import { useAuth } from '@/app/context/AuthContext';
 import { PenSquare, Trash2, AlertTriangle, BookOpen, Calendar, User, ArrowRight, Eye, Plus } from 'lucide-react';

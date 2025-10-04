@@ -1,11 +1,12 @@
-// app/layout.tsx
 "use client";
 
 import React, { useEffect } from "react";
 import { Geist } from "next/font/google";
-import "./globals.css";
+import "./global.css";
 import { AuthProvider } from "./context/AuthContext";
-import Script from 'next/script'; // Import the Next.js Script component
+import Script from 'next/script';
+import Sidebar from "./components/Sidebar"; // 1. Import the new Sidebar
+import AuthModal from "./components/AuthModal";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,27 +32,24 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} font-sans antialiased`}
+        className={`${geistSans.variable} font-sans antialiased bg-black text-white relative isolate overflow-x-hidden mouse-gradient-background`}
       >
-        {/* --- THIS IS THE FIX --- */}
-        {/* Add the AdSense script here, using the environment variable */}
         <Script
           async
           src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
           crossOrigin="anonymous"
-          strategy="afterInteractive" // Loads the script after the page is usable
+          strategy="afterInteractive"
         />
-        {/* -------------------- */}
-
-        <style jsx global>{`
-          /* ... your global styles ... */
-        `}</style>
 
         <AuthProvider>
-          <div className="bg-black text-white font-sans relative isolate overflow-x-hidden mouse-gradient-background">
-            {/* ... your background gradients ... */}
+          <Sidebar /> {/* 2. Add the Sidebar component here */}
+          <main 
+            style={{ paddingLeft: 'var(--sidebar-width, 5rem)' }} 
+            className="transition-all duration-300 ease-in-out"
+          >
             {children}
-          </div>
+          </main>
+          <AuthModal />
         </AuthProvider>
       </body>
     </html>

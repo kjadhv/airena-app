@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, Fragment, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import Header from '@/app/components/Header';
+import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 import Link from 'next/link';
 import { db } from '@/app/firebase/config';

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import Header from '@/app/components/Header';
+import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 import { ShieldCheck, UserCheck, Youtube, Twitter, Check, X } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';

@@ -1,6 +1,6 @@
 import { db } from "@/app/firebase/firebaseAdmin";
 import { notFound } from "next/navigation";
-import Header from "@/app/components/Header";
+import Header from "@/app/components/Sidebar";
 import Footer from "@/app/components/Footer";
 import AppImage from "@/app/components/AppImage";
 import { Timestamp } from "firebase-admin/firestore";

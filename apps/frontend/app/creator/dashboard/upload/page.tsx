@@ -2,7 +2,7 @@
 "use client";
 import React from 'react';
 import UploadForm from '@/app/components/UploadForm'; 
-import Header from '@/app/components/Header';
+import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 
 const UploadPage = () => {
