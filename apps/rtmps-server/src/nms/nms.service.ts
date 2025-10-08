@@ -40,14 +40,44 @@ export class NmsService implements OnModuleInit {
     }
 
     const config = {
-      rtmp: { port: 1935, chunk_size: 60000, gop_cache: true, ping: 30, ping_timeout: 60 },
-      http: { port: 8000, mediaroot: mediaRoot, allow_origin: '*' },
-      auth: { api: true, api_user: 'admin', api_pass: 'admin' },
+      rtmp: { 
+        port: 1935, 
+        chunk_size: 60000, 
+        gop_cache: true, 
+        ping: 30, 
+        ping_timeout: 60 
+      },
+      http: { 
+        port: 8000, 
+        mediaroot: mediaRoot, 
+        allow_origin: '*' 
+      },
+      trans: {
+        ffmpeg: ffmpegPath,
+        tasks: [
+          {
+            app: 'live',
+            hls: true,
+            hlsFlags: '[hls_time=2:hls_list_size=3:hls_flags=delete_segments]',
+            hlsKeep: true, // Keep segments during stream
+            dash: false
+          }
+        ]
+      },
+      auth: { 
+        api: true, 
+        api_user: 'admin', 
+        api_pass: 'admin' 
+      },
     };
 
     this.nms = new NodeMediaServer(config);
     this.setupStreamEvents(mediaRoot);
     this.nms.run();
+    
+    this.logger.log(`✅ NMS initialized with HLS transcoding enabled`);
+    this.logger.log(`📁 Media root: ${mediaRoot}`);
+    this.logger.log(`🎬 FFmpeg path: ${ffmpegPath}`);
   }
 
   private extractBaseStreamKey(streamPath: string): string {
@@ -81,6 +111,12 @@ export class NmsService implements OnModuleInit {
         this.logger.log(`[AUTH] ACCEPTED stream key: ${baseStreamKey}`);
         await this.streamService.updateStreamStatus(baseStreamKey, true);
       }
+    });
+
+    this.nms.on('postPublish', (id, StreamPath, args) => {
+      this.logger.log(`[NMS] 🎥 Stream started: ${StreamPath} (Session ID: ${id})`);
+      const streamKey = StreamPath.split('/').pop();
+      this.logger.log(`[NMS] 📺 HLS stream available at: http://localhost:8000/live/${streamKey}/index.m3u8`);
     });
 
     this.nms.on('donePublish', async (id, StreamPath, args) => {
@@ -120,7 +156,6 @@ export class NmsService implements OnModuleInit {
           });
           this.logger.log(`[QUEUE] Added transcoding job for stream key: ${baseStreamKey}`);
         } catch (error) {
-          // FIX: Check if 'error' is an instance of Error before using its properties
           if (error instanceof Error) {
             this.logger.error(`[QUEUE] Failed to add job: ${error.message}`);
           } else {
@@ -136,7 +171,6 @@ export class NmsService implements OnModuleInit {
           const files = fs.readdirSync(mediaRoot, { recursive: true });
           files.forEach(file => this.logger.debug(`  - ${file}`));
         } catch (error) {
-          // FIX: Check if 'error' is an instance of Error before using its properties
           if (error instanceof Error) {
             this.logger.error(`[NMS] Could not list media directory: ${error.message}`);
           } else {
@@ -144,10 +178,6 @@ export class NmsService implements OnModuleInit {
           }
         }
       }
-    });
-
-    this.nms.on('postPublish', (id, StreamPath, args) => {
-      this.logger.log(`[NMS] Stream started: ${StreamPath} (Session ID: ${id})`);
     });
   }
 }

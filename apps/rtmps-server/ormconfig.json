@@ -1,6 +1,8 @@
 {
   "type": "postgres",
-  "database": "process.env.DATABASE_PATH || ./data/streaming.db",
-  "entities": ["src/**/*.entity{.ts,.js}"],
-  "synchronize": true
+  "url": "process.env.DATABASE_URL",
+  "synchronize": true,
+  "logging": true,
+  "entities": ["dist/**/*.entity{.ts,.js}"],
+  "ssl": false
 }
