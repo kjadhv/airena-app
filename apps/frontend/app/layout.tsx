@@ -4,8 +4,7 @@ import React, { useEffect } from "react";
 import { Geist } from "next/font/google";
 import "./global.css";
 import { AuthProvider } from "./context/AuthContext";
-import Script from 'next/script';
-import Sidebar from "./components/Sidebar"; // 1. Import the new Sidebar
+import Sidebar from "./components/Sidebar";
 import AuthModal from "./components/AuthModal";
 
 const geistSans = Geist({
@@ -30,25 +29,23 @@ export default function RootLayout({
   }, []);
 
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} font-sans antialiased bg-black text-white relative isolate overflow-x-hidden mouse-gradient-background`}
-      >
-        <Script
-          async
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
-
+    <html lang="en" className={`${geistSans.variable}`}>
+      <body className="bg-black text-white overflow-x-hidden">
         <AuthProvider>
-          <Sidebar /> {/* 2. Add the Sidebar component here */}
-          <main 
-            style={{ paddingLeft: 'var(--sidebar-width, 5rem)' }} 
-            className="transition-all duration-300 ease-in-out"
+          <Sidebar />
+
+          {/* 💡 MAIN CONTENT LAYOUT FIX */}
+          <main
+            className="
+              transition-all duration-300 ease-in-out
+              lg:pl-20
+              xl:pl-64
+              pt-[64px] lg:pt-0
+            "
           >
             {children}
           </main>
+
           <AuthModal />
         </AuthProvider>
       </body>
