@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
 
 interface ReactionBarProps {
   postId: string;
-  collectionName: string; // e.g. "videos"
+  collectionName: string;
 }
 
 export default function ReactionBar({ postId, collectionName }: ReactionBarProps) {
@@ -30,8 +30,8 @@ export default function ReactionBar({ postId, collectionName }: ReactionBarProps
     await updateDoc(ref, {
       [`reactions.${type}`]: increment(1),
     });
-    if (type === "likes") setLikes((prev) => prev + 1);
-    else setDislikes((prev) => prev + 1);
+    if (type === "likes") setLikes(prev => prev + 1);
+    else setDislikes(prev => prev + 1);
   };
 
   return (

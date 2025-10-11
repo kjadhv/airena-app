@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import VideoPlayer from '@/app/components/VideoPlayer';
+import VideoPlayer from '@/app/components/CustomVideoPlayer';
 
 interface StreamDetails {
   hlsUrl: string;
@@ -64,7 +64,7 @@ export default function WatchPage() {
       return (
         <div>
           <h1 className="text-2xl font-bold mb-4">Watching Stream</h1>
-          <VideoPlayer src={streamDetails.hlsUrl} />
+          <VideoPlayer videoUrl={streamDetails.hlsUrl} />
         </div>
       );
     }

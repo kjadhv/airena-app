@@ -127,7 +127,8 @@ const CreatorDashboardPage = () => {
                         </div>
                         <Link href="/creator/dashboard/upload" className="mt-6 sm:mt-0 w-full sm:w-auto bg-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-emerald-700 flex items-center justify-center gap-2 transform hover:scale-105 transition-transform shadow-lg">
                             <Upload size={18} /> Upload Video
-                        </Link>
+                        </Link>  
+                    
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
