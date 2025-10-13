@@ -231,7 +231,7 @@ const WatchContent = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white flex flex-col">
-      <main className="flex-grow pt-24 pb-20 transition-all duration-300 px-6 sm:px-10 lg:px-16">
+      <main className="flex-grow pt-24 pb-20 transition-all duration-300 px-6 sm:px-10 lg:px-16 lg:ml-20"> {/* <-- CHANGE APPLIED HERE */}
         {isLoading ? (
           <>
             <div className="h-[45vh] lg:h-[60vh] bg-gray-800/40 rounded-2xl animate-pulse mb-12" />

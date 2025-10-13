@@ -49,7 +49,7 @@ export default function HomePage() {
         </div>
 
         {/* === Main Content === */}
-        <main className="w-full flex flex-col gap-16">
+        <main className="w-full flex flex-col gap-16 lg:ml-20"> {/* <-- CHANGE APPLIED HERE */}
           <HeroSection />
           <FeaturedVideoSection />
           <BigTournamentSection />
