@@ -3,7 +3,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
 import { db } from '@/app/firebase/config';
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
-import Header from '@/app/components/Sidebar';
+// import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
 import { useAuth } from '@/app/context/AuthContext';
 import { PenSquare, Trash2, AlertTriangle, BookOpen, Calendar, User, ArrowRight, Eye, Plus } from 'lucide-react';
@@ -85,7 +85,7 @@ const BlogPage = () => {
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800">
-                <Header />
+                {/* <Header /> */}
                 <div className="relative h-screen flex items-center justify-center">
                     <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
                 </div>
@@ -99,7 +99,7 @@ const BlogPage = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800">
-            <Header />
+            {/* <Header /> */}
             
             <main className="relative pt-20 pb-4">
                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

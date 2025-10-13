@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,15 +12,13 @@ import {
   LogIn,
   LogOut,
   UserCircle,
-  LucideProps,
   Dot,
   Menu,
-  X
+  X,
 } from "lucide-react";
 
-// SidebarItem
 type SidebarItemProps = {
-  icon: React.ComponentType<LucideProps>;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; // ✅ Fixed type
   text: string;
   href: string;
   isExpanded: boolean;
@@ -41,45 +40,53 @@ const SidebarItem = ({
   const isActive = pathname === href;
   const isSignIn = text === "Sign In";
   const { setIsModalOpen } = useAuth();
+
   const colorClass =
     activeColor === "red"
       ? "text-red-500 group-hover:text-red-400"
       : "text-emerald-400 group-hover:text-emerald-300";
-  const bgClass =
-    activeColor === "red" ? "bg-red-500/10" : "bg-emerald-500/10";
+  const bgClass = activeColor === "red" ? "bg-red-500/10" : "bg-emerald-500/10";
 
   const content = (
     <div
-      className={`
-        flex items-center gap-3 px-4 py-3 my-1 rounded-xl group transition-all w-full
-        ${isActive
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl group transition-all w-full ${
+        isActive
           ? `${bgClass} font-semibold shadow`
-          : `text-gray-400 hover:bg-white/[0.05] hover:text-${activeColor}-300`}
-        ${mobile ? "" : ""}
-      `}
+          : `text-gray-400 hover:bg-white/[0.05] hover:text-${activeColor}-300`
+      }`}
     >
       <div className="relative">
         <Icon
-          size={mobile ? 24 : 22}
-          className={`shrink-0 transition-transform group-hover:scale-110 ${isActive ? colorClass : ""}`}
+          width={mobile ? 24 : 22}
+          height={mobile ? 24 : 22}
+          className={`shrink-0 transition-transform group-hover:scale-110 ${
+            isActive ? colorClass : ""
+          }`}
         />
         {isActive && !mobile && (
           <span
-            className={`absolute -left-2 top-2 w-2 h-2 rounded-full ${activeColor === "red" ? "bg-red-400" : "bg-emerald-400"} animate-pulse`}
-          ></span>
+            className={`absolute -left-2 top-2 w-2 h-2 rounded-full ${
+              activeColor === "red" ? "bg-red-400" : "bg-emerald-400"
+            } animate-pulse`}
+          />
         )}
       </div>
+
       <span
-        className={`
-          overflow-hidden transition-all whitespace-nowrap text-base tracking-tight
-          ${isExpanded || mobile ? "opacity-100" : "opacity-0 w-0"}
-        `}
+        className={`overflow-hidden transition-all whitespace-nowrap text-base tracking-tight ${
+          isExpanded || mobile ? "opacity-100" : "opacity-0 w-0"
+        }`}
       >
         {text}
       </span>
+
       {text === "Live" && (
         <Dot
-          className={`${isActive || activeColor === "red" ? "text-red-500" : "text-emerald-300"} animate-pulse`}
+          className={`${
+            isActive || activeColor === "red"
+              ? "text-red-500"
+              : "text-emerald-300"
+          } animate-pulse`}
           size={22}
         />
       )}
@@ -111,22 +118,13 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-
-  // Close mobile menu on route change
   const pathname = usePathname();
-  useEffect(() => {
-    setIsMobileOpen(false);
-  }, [pathname]);
 
-  // Prevent body scroll when mobile menu is open
+  useEffect(() => setIsMobileOpen(false), [pathname]);
   useEffect(() => {
-    if (isMobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    document.body.style.overflow = isMobileOpen ? "hidden" : "";
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
     };
   }, [isMobileOpen]);
 
@@ -140,33 +138,31 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar */}
+      {/* 🖥️ Desktop Sidebar */}
       <aside
-        className={`
-          hidden lg:flex
-          fixed top-0 left-0 h-screen z-40 group/sidebar
-          bg-gradient-to-br from-black/80 via-gray-900/70 to-transparent
-          shadow-2xl shadow-emerald-500/10 backdrop-blur-xl select-none
-          transition-all duration-300 ease-in-out
-          ${isExpanded ? "w-64" : "w-20"}
-        `}
+        className={`hidden lg:flex fixed top-0 left-0 h-screen z-40 group/sidebar
+        bg-gradient-to-b from-black/80 via-gray-900/80 to-black/90
+        backdrop-blur-xl border-r border-white/10
+        transition-all duration-300 ease-in-out
+        ${isExpanded ? "w-64" : "w-20"}`}
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
-        <div className="flex flex-col h-full p-3 w-full">
+        <div className="flex flex-col h-full p-4 w-full">
           {/* Logo */}
-          <div className="flex items-center justify-center mb-10 mt-2 h-12">
+          <div className="flex items-center justify-center mb-10 mt-2">
             <Link href="/" className="block">
               <img
                 src="/headerlogo.png"
                 alt="Logo"
-                className="h-10 w-auto transition-transform duration-200 hover:scale-110 brightness-125"
+                className="h-10 w-auto hover:scale-105 transition-transform"
                 draggable={false}
               />
             </Link>
           </div>
+
           {/* Navigation */}
-          <nav className="flex flex-col gap-1 flex-grow relative">
+          <nav className="flex flex-col gap-1 flex-grow">
             {navItems.map((item) => (
               <SidebarItem
                 key={item.text}
@@ -176,65 +172,58 @@ export default function Sidebar() {
               />
             ))}
           </nav>
+
           {/* Profile/Login */}
-          <div className="border-t border-white/10 pt-4 mt-6">
+          <div className="border-t border-white/10 pt-4 mt-4">
             {user ? (
               <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 group transition-all">
-                <div className="relative">
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt="Profile"
-                      className="w-11 h-11 rounded-full object-cover bg-gray-400/30"
-                    />
-                  ) : (
-                    <UserCircle size={44} className="rounded-full text-gray-400 bg-gray-900/60 p-1" />
-                  )}
-                </div>
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt="Profile"
+                    className="w-10 h-10 rounded-full object-cover border border-white/10"
+                  />
+                ) : (
+                  <UserCircle size={40} className="text-gray-400" />
+                )}
+
                 <div
-                  className={`
-                    flex flex-col justify-center min-w-0 transition-all
-                    ${isExpanded ? "opacity-100 ml-2 w-40" : "opacity-0 w-0"}
-                  `}
+                  className={`transition-all ${
+                    isExpanded ? "opacity-100 ml-2" : "opacity-0 w-0"
+                  }`}
                 >
-                  <span className="font-semibold text-white truncate">
-                    {user.displayName || "User Profile"}
+                  <span className="font-semibold text-white text-sm">
+                    {user.displayName || "User"}
                   </span>
-                  <span className="text-xs text-gray-400">View Profile</span>
                 </div>
+
                 {isExpanded && (
                   <button
                     onClick={logout}
-                    className="ml-auto text-gray-400 hover:text-red-500 rounded-full p-2 transition"
-                    aria-label="Sign Out"
+                    className="ml-auto text-gray-400 hover:text-red-500 transition"
                   >
-                    <LogOut size={20} />
+                    <LogOut size={18} />
                   </button>
                 )}
               </div>
             ) : (
-              <SidebarItem
-                icon={LogIn}
-                text="Sign In"
-                href="#"
-                isExpanded={isExpanded}
-              />
+              <SidebarItem icon={LogIn} text="Sign In" href="#" isExpanded={isExpanded} />
             )}
           </div>
         </div>
       </aside>
 
-      {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-lg border-b border-gray-800">
+      {/* 📱 Mobile Header */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={() => setIsMobileOpen(true)}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/10 rounded-lg transition"
             aria-label="Open menu"
           >
             <Menu size={24} className="text-emerald-400" />
           </button>
-          
+
           <Link href="/" className="flex items-center justify-center">
             <img
               src="/headerlogo.png"
@@ -244,79 +233,51 @@ export default function Sidebar() {
             />
           </Link>
 
-          <Link href="/profile" className="p-1">
+          <Link href="/profile">
             {user ? (
               <img
                 src={user.photoURL || "/default-user.png"}
                 alt="Profile"
-                className="w-8 h-8 rounded-full object-cover bg-gray-400/30 border border-emerald-500/30"
+                className="w-8 h-8 rounded-full border border-emerald-500/30"
               />
             ) : (
-              <UserCircle size={32} className="text-gray-400" />
+              <UserCircle size={28} className="text-gray-400" />
             )}
           </Link>
         </div>
       </header>
 
-      {/* Mobile Fullscreen Menu */}
+      {/* 📱 Mobile Fullscreen Menu */}
       <div
-        className={`
-          lg:hidden fixed inset-0 z-50 transition-all duration-300 ease-in-out
-          ${isMobileOpen ? "visible" : "invisible"}
-        `}
+        className={`lg:hidden fixed inset-0 z-50 transition-all duration-300 ease-in-out ${
+          isMobileOpen ? "visible" : "invisible"
+        }`}
       >
         {/* Backdrop */}
         <div
-          className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-300
-            ${isMobileOpen ? "opacity-100" : "opacity-0"}
-          `}
+          className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${
+            isMobileOpen ? "opacity-100" : "opacity-0"
+          }`}
           onClick={() => setIsMobileOpen(false)}
         />
 
-        {/* Menu Panel */}
+        {/* Sliding Panel */}
         <div
-          className={`
-            absolute top-0 right-0 h-full w-[85%] max-w-sm
-            bg-gradient-to-br from-gray-900 via-black to-gray-900
-            shadow-2xl transition-transform duration-300 ease-out
-            ${isMobileOpen ? "translate-x-0" : "translate-x-full"}
-          `}
+          className={`absolute top-0 right-0 h-full w-[80%] max-w-sm bg-gradient-to-b from-gray-900 to-black shadow-2xl transition-transform duration-300 ease-out ${
+            isMobileOpen ? "translate-x-0" : "translate-x-full"
+          }`}
         >
           <div className="flex flex-col h-full p-6">
-            {/* Close Button */}
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-bold text-white">Menu</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Menu</h2>
               <button
                 onClick={() => setIsMobileOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                aria-label="Close menu"
+                className="p-2 hover:bg-white/10 rounded-full transition"
               >
                 <X size={24} className="text-gray-400" />
               </button>
             </div>
 
-            {/* Profile Section */}
-            {user && (
-              <div className="flex items-center gap-4 p-4 bg-white/5 rounded-xl mb-6 border border-white/10">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt="Profile"
-                    className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500"
-                  />
-                ) : (
-                  <UserCircle size={56} className="text-gray-400" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white truncate">
-                    {user.displayName || "User"}
-                  </p>
-                  <p className="text-sm text-gray-400 truncate">{user.email}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Navigation */}
             <nav className="flex flex-col gap-2 flex-grow">
               {navItems.map((item) => (
                 <SidebarItem
@@ -324,13 +285,11 @@ export default function Sidebar() {
                   {...item}
                   isExpanded={true}
                   mobile={true}
-                  activeColor={item.activeColor}
                   onClick={() => setIsMobileOpen(false)}
                 />
               ))}
             </nav>
 
-            {/* Sign In/Out */}
             <div className="border-t border-white/10 pt-4 mt-4">
               {user ? (
                 <button
@@ -338,10 +297,10 @@ export default function Sidebar() {
                     logout();
                     setIsMobileOpen(false);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition"
                 >
                   <LogOut size={22} />
-                  <span className="text-base font-medium">Sign Out</span>
+                  <span className="font-medium">Sign Out</span>
                 </button>
               ) : (
                 <SidebarItem
