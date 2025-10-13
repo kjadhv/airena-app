@@ -14,19 +14,35 @@ import {
 interface AirenaVideoPlayerProps {
   videoUrl: string;
   poster?: string;
+  autoPlay?: boolean;
 }
 
-const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({ videoUrl, poster }) => {
+const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({ 
+  videoUrl, 
+  poster,
+  autoPlay = false 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [showControls, setShowControls] = useState(true);
   const [showCenterPause, setShowCenterPause] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(autoPlay); // Mute if autoplay
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Autoplay effect
+  useEffect(() => {
+    if (autoPlay && videoRef.current) {
+      videoRef.current.muted = true;
+      setIsMuted(true);
+      videoRef.current.play().catch(err => {
+        console.log("Autoplay prevented:", err);
+      });
+    }
+  }, [autoPlay]);
 
   // Fade out controls
   const handleUserActivity = () => {
