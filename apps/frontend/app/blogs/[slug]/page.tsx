@@ -1,142 +1,276 @@
-import { notFound } from "next/navigation";
-import Header from "@/app/components/Sidebar";
-import Footer from "@/app/components/Footer";
-import AppImage from "@/app/components/AppImage";
-import { Timestamp } from "firebase-admin/firestore";
-import ViewCounter from "@/app/components/ViewCounter";
-import { Calendar, User, Eye } from "lucide-react";
-import { db } from "@/app/firebase/firebaseAdmin";
+"use client";
 
-// Define the shape of the post data
-interface Post {
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { db } from "@/app/firebase/config";
+import { CalendarDays, ArrowLeft, Clock, User, Share2, Bookmark } from "lucide-react";
+import dynamic from "next/dynamic";
+import { processContentForEmbeds } from "@/app/lib/processContent";
+import ReadingProgress from "@/app/components/ReadingProgress";
+
+const CommentSection = dynamic(() => import("@/app/components/CommentSection"), {
+  ssr: false,
+});
+import SocialEmbedRenderer from "@/app/components/SocialEmbedRenderer";
+
+interface BlogPost {
   id: string;
   title: string;
+  content: string;
   authorName: string;
   createdAt: Date;
-  imageUrl: string;
-  content: string;
-  views?: number;
+  slug: string;
+  imageUrl?: string;
 }
 
-// Updated params to be a Promise
-export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default function BlogPostPage() {
+  const params = useParams();
+  const router = useRouter();
+  const slug = params?.slug as string;
 
-  const snapshot = await db
-    .collection("posts")
-    .where("slug", "==", slug)
-    .limit(1)
-    .get();
+  const [post, setPost] = useState<BlogPost | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [readingTime, setReadingTime] = useState(0);
 
-  if (snapshot.empty) {
-    notFound();
-  }
+  useEffect(() => {
+    async function fetchPost() {
+      if (!slug) return;
+      try {
+        const postsRef = collection(db, "posts");
+        const q = query(postsRef, where("slug", "==", slug));
+        const querySnapshot = await getDocs(q);
 
-  const doc = snapshot.docs[0];
-  const data = doc.data();
-  
-  const createdAtTimestamp = data.createdAt as Timestamp;
-  
-  const post: Post = {
-    id: doc.id,
-    title: data.title,
-    authorName: data.authorName || 'Airena',
-    createdAt: createdAtTimestamp.toDate(),
-    imageUrl: data.imageUrl,
-    content: data.content,
-    views: data.views || 0,
+        if (querySnapshot.empty) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
+
+        const doc = querySnapshot.docs[0];
+        const data = doc.data();
+        const createdAtTimestamp = data.createdAt as Timestamp;
+        const processedContent = processContentForEmbeds(data.content);
+        const wordCount = data.content.replace(/<[^>]*>/g, "").split(/\s+/).length;
+        const minutes = Math.ceil(wordCount / 200);
+
+        setPost({
+          id: doc.id,
+          title: data.title,
+          content: processedContent,
+          authorName: data.authorName,
+          createdAt: createdAtTimestamp.toDate(),
+          slug: data.slug,
+          imageUrl: data.imageUrl,
+        });
+        setReadingTime(minutes);
+      } catch (err) {
+        console.error("Error fetching post:", err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPost();
+  }, [slug]);
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: post?.title,
+          url: window.location.href,
+        });
+      } catch {
+        console.log("Share cancelled");
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert("Link copied to clipboard!");
+    }
   };
 
-  return (
-    <div className="bg-transparent relative">
-      {/* Reading Progress Bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-gray-800 z-50">
-        <div 
-          className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-300"
-          style={{
-            width: '0%',
-          }}
-          id="reading-progress"
-        />
-      </div>
-      
-      <Header />
-      <main className="pt-24 pb-16 min-h-screen flex justify-center">
-        <article className="w-full max-w-4xl px-4 md:px-6 lg:px-8">
-          {/* Call the client component to trigger the view count */}
-          <ViewCounter postId={post.id} />
-
-          <div className="relative w-full h-64 md:h-96 mb-8 rounded-2xl overflow-hidden shadow-2xl shadow-black/30 ring-1 ring-gray-700/50">
-            <AppImage
-              src={post.imageUrl}
-              alt={post.title}
-              className="object-cover"
-              fallbackText={post.title}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+  // --- Loading State ---
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white flex items-center justify-center">
+        <div className="text-center space-y-6">
+          <div className="relative w-20 h-20 mx-auto">
+            <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-t-emerald-500 animate-spin"></div>
           </div>
-          
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight text-white bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              {post.title}
-            </h1>
-            <div className="flex items-center justify-center flex-wrap gap-x-6 gap-y-2 text-md text-gray-400">
-                <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                    <User className="w-4 h-4 text-emerald-400" />
-                    <span>{post.authorName}</span>
-                </div>
-                 <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                    <Calendar className="w-4 h-4 text-emerald-400" />
-                    <span>
-                        {post.createdAt.toLocaleDateString("en-US", {
-                          year: "numeric", month: "long", day: "numeric",
-                        })}
-                    </span>
-                </div>
-                <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                    <Eye className="w-4 h-4 text-emerald-400" />
-                    <span>{post.views?.toLocaleString() || '0'} views</span>
-                </div>
+          <p className="text-gray-400 text-sm">Loading your story...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !post) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white flex items-center justify-center p-6">
+        <div className="text-center max-w-md space-y-6">
+          <div className="w-24 h-24 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
+            <div className="text-5xl">🔍</div>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">
+            Story Not Found
+          </h1>
+          <p className="text-gray-400 text-lg">
+            The blog post you&apos;re looking for seems to have wandered off into the digital void.
+          </p>
+          <button
+            onClick={() => router.push("/blogs")}
+            className="group inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-emerald-500/50"
+          >
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            Back to Blogs
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <ReadingProgress />
+
+      <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white">
+        {/* Header */}
+        <header className="sticky top-0 z-40 backdrop-blur-lg bg-black/70 border-b border-gray-800">
+          <div className="max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
+            <button
+              onClick={() => router.push("/blogs")}
+              className="group flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+              <span className="font-medium">All Stories</span>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleShare}
+                className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+                aria-label="Share post"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
+              <button
+                className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+                aria-label="Bookmark post"
+              >
+                <Bookmark className="w-5 h-5" />
+              </button>
             </div>
           </div>
-          
-          <div
-            className="prose prose-invert prose-xl max-w-none mx-auto blog-content-rendered
-                       prose-p:text-gray-200 prose-p:leading-[1.9] prose-p:text-[1.125rem] prose-p:mb-6
-                       prose-h1:!text-emerald-400 prose-h1:!font-extrabold prose-h1:!text-5xl prose-h1:!leading-tight prose-h1:!mt-12 prose-h1:!mb-6 prose-h1:!tracking-tight
-                       prose-h2:!text-emerald-400 prose-h2:!font-bold prose-h2:!text-4xl prose-h2:!mt-16 prose-h2:!mb-5 prose-h2:!tracking-tight
-                       prose-h3:!text-emerald-300 prose-h3:!font-semibold prose-h3:!text-3xl prose-h3:!mt-12 prose-h3:!mb-4
-                       prose-headings:!text-emerald-400
-                       prose-blockquote:!border-l-4 prose-blockquote:!border-emerald-500 prose-blockquote:!bg-gradient-to-r prose-blockquote:!from-emerald-500/20 prose-blockquote:!via-emerald-500/10 prose-blockquote:!to-transparent
-                       prose-blockquote:!italic prose-blockquote:!text-gray-100 prose-blockquote:!pl-8 prose-blockquote:!py-6 prose-blockquote:!my-8 prose-blockquote:!rounded-r-xl prose-blockquote:!shadow-lg
-                       prose-li:text-gray-200 prose-li:leading-relaxed prose-li:mb-3
-                       prose-ul:!my-6 prose-ol:!my-6
-                       prose-a:!text-emerald-400 prose-a:!font-medium prose-a:!no-underline prose-a:!border-b-2 prose-a:!border-emerald-400/30 hover:prose-a:!text-emerald-300 hover:prose-a:!border-emerald-300
-                       prose-strong:!text-white prose-strong:!font-bold
-                       prose-code:!bg-gray-800/80 prose-code:!text-emerald-400 prose-code:!px-2 prose-code:!py-1 prose-code:!rounded-md prose-code:!text-base prose-code:!font-mono prose-code:!border prose-code:!border-gray-700
-                       prose-pre:!bg-gradient-to-br prose-pre:!from-slate-900 prose-pre:!to-slate-800 prose-pre:!border-2 prose-pre:!border-gray-700 prose-pre:!shadow-2xl prose-pre:!my-8 prose-pre:!rounded-xl
-                       prose-img:!rounded-2xl prose-img:!shadow-2xl prose-img:!my-12 prose-img:!border-2 prose-img:!border-gray-700/50
-                       prose-table:!mx-auto prose-table:!shadow-2xl prose-table:!rounded-xl prose-table:!my-10
-                       prose-hr:!border-t-2 prose-hr:!border-gray-700 prose-hr:!my-16 prose-hr:!opacity-50"
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          />
+        </header>
 
-        </article>
-      </main>
-      <Footer />
-      
-      {/* Reading progress script */}
-      <script dangerouslySetInnerHTML={{ __html: `
-        window.addEventListener('scroll', () => {
-          const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
-          const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-          const scrolled = (winScroll / height) * 100;
-          const progressBar = document.getElementById('reading-progress');
-          if (progressBar) {
-            progressBar.style.width = scrolled + '%';
-          }
-        });
-      `}} />
-    </div>
+        {/* Hero Section */}
+        <section className="relative">
+          {post.imageUrl ? (
+            <div className="relative w-full h-[55vh] md:h-[65vh] overflow-hidden">
+              <img
+                src={post.imageUrl}
+                alt={post.title}
+                className="w-full h-full object-cover scale-105 animate-fade-in"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
+              <div className="absolute bottom-0 inset-x-0 p-6 md:p-12">
+                <div className="max-w-4xl mx-auto text-center">
+                  <h1 className="text-4xl md:text-6xl font-extrabold leading-tight drop-shadow-2xl">
+                    <span className="bg-gradient-to-r from-white via-emerald-200 to-cyan-200 bg-clip-text text-transparent">
+                      {post.title}
+                    </span>
+                  </h1>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-br from-emerald-950/30 via-black to-cyan-950/30 py-32 text-center">
+              <h1 className="text-5xl font-extrabold">
+                <span className="bg-gradient-to-r from-white via-emerald-200 to-cyan-200 bg-clip-text text-transparent">
+                  {post.title}
+                </span>
+              </h1>
+            </div>
+          )}
+        </section>
+
+        {/* Blog Content */}
+        <main className="max-w-3xl mx-auto px-6 md:px-8 py-16">
+          {/* Meta Info */}
+          <div className="flex flex-wrap items-center justify-center gap-6 pb-10 mb-16 border-b border-gray-800/50 text-center">
+            <div className="flex items-center gap-2 text-gray-400">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Written by</p>
+                <p className="font-medium text-white">{post.authorName}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-sm text-gray-400">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-emerald-500" />
+                <span>
+                  {post.createdAt.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+              <span className="text-gray-700">•</span>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-500" />
+                <span>{readingTime} min read</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Article */}
+          <article
+            className="prose prose-invert prose-emerald mx-auto text-center leading-relaxed text-gray-200 
+              prose-p:text-gray-300 prose-p:leading-relaxed prose-p:text-[1.15rem] 
+              prose-headings:text-white prose-h2:mt-12 prose-h2:text-3xl prose-h2:font-semibold 
+              prose-img:rounded-xl prose-img:mx-auto prose-img:shadow-xl"
+          >
+            <SocialEmbedRenderer content={post.content} />
+          </article>
+
+          {/* Share */}
+          <div className="mt-20 pt-12 border-t border-gray-800/50">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-emerald-500/10 border border-emerald-500/20 text-center md:text-left">
+              <div>
+                <h3 className="text-xl font-semibold mb-1">Enjoyed this post?</h3>
+                <p className="text-gray-400">Share it with your network 🌐</p>
+              </div>
+              <button
+                onClick={handleShare}
+                className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-emerald-500/50 flex items-center gap-2"
+              >
+                <Share2 className="w-5 h-5" />
+                Share
+              </button>
+            </div>
+          </div>
+
+          {/* Comments */}
+          <div className="mt-20 pt-12 border-t border-gray-800/50">
+            <div className="mb-8 text-center">
+              <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                Join the Discussion
+              </h2>
+              <p className="text-gray-400">
+                Share your thoughts and engage with our community
+              </p>
+            </div>
+            <CommentSection contentId={post.id} contentType="blog" />
+          </div>
+        </main>
+      </div>
+    </>
   );
 }

@@ -141,7 +141,7 @@ const VideoPlayerPage = () => {
               {videoData.description}
             </div>
           )}
-          <CommentSection videoId={videoData.id} />
+          <CommentSection contentId={videoData.id} contentType="video" />
         </div>
       </main>
       <Footer />
