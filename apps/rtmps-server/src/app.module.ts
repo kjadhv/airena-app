@@ -9,8 +9,13 @@ import { NmsModule } from './nms/nms.module';
 import { StreamModule } from './stream/stream.module';
 import { MetricsModule } from './metrics/metric.module';
 import { QueueModule } from './queue/queue.module';
-import { VideoModule } from './video/video.module'; // Add VideoModule
-import { FirebaseModule } from './firebase/firebase.module'; // Add FirebaseModule
+import { VideoModule } from './video/video.module';
+import { FirebaseModule } from './firebase/firebase.module';
+
+// --- NEW MODULE IMPORTS ---
+import { ModerationModule } from './moderation/moderation.module';
+import { ChatModule } from './chat/chat.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -46,8 +51,13 @@ import { FirebaseModule } from './firebase/firebase.module'; // Add FirebaseModu
     MetricsModule,
     NmsModule,
     QueueModule,
-    VideoModule, // Add VideoModule
-    FirebaseModule, // Add FirebaseModule
+    VideoModule,
+    FirebaseModule,
+
+    // --- NEW COMMUNITY & MODERATION MODULES ---
+    ModerationModule,
+    ChatModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

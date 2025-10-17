@@ -13,14 +13,13 @@ import {
 import { auth, googleProvider } from "../firebase/config";
 import AuthModal from "../components/AuthModal";
 
-// --- THIS IS THE FIX ---
-// Add isCreator and isSuperAdmin to the context type
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
-  isCreator: boolean; // Add creator role status
-  isSuperAdmin: boolean; // Add superAdmin role status
+  isCreator: boolean;
+  isBlogAdmin: boolean;
+  isSuperAdmin: boolean;
   isModalOpen: boolean;
   setIsModalOpen: (isOpen: boolean) => void;
   loginWithGoogle: () => Promise<void>;
@@ -35,8 +34,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isCreator, setIsCreator] = useState(false); // Add state for creator role
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false); // Add state for superAdmin role
+  const [isCreator, setIsCreator] = useState(false);
+  const [isBlogAdmin, setIsBlogAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
@@ -46,13 +46,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Force token refresh to get updated claims for all roles
         const idTokenResult = await firebaseUser.getIdTokenResult(true);
         setIsAdmin(!!idTokenResult.claims.admin);
-        setIsCreator(!!idTokenResult.claims.creator); // Check for creator claim
-        setIsSuperAdmin(!!idTokenResult.claims.superAdmin); // Check for superAdmin claim
+        setIsCreator(!!idTokenResult.claims.creator);
+        setIsBlogAdmin(!!idTokenResult.claims.blogAdmin);
+        setIsSuperAdmin(!!idTokenResult.claims.superAdmin);
         setIsModalOpen(false);
       } else {
         // If no user, reset all roles to false
         setIsAdmin(false);
         setIsCreator(false);
+        setIsBlogAdmin(false);
         setIsSuperAdmin(false);
       }
       setLoading(false);
@@ -76,12 +78,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await signOut(auth);
   };
 
-  // Provide all roles and functions through the context value
   const value = { 
     user, 
     loading, 
     isAdmin,
     isCreator,
+    isBlogAdmin,
     isSuperAdmin,
     isModalOpen,
     setIsModalOpen,

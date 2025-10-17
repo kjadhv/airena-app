@@ -1,57 +1,80 @@
 "use client";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react"; // 👈 FIXED: Correctly imported React hooks
+import Hls from "hls.js";
 import {
-  Play,
-  Pause,
-  RotateCcw,
-  RotateCw,
-  Volume2,
-  VolumeX,
-  Maximize2,
-  Minimize2,
+  Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize2, Minimize2,
 } from "lucide-react";
 
 interface AirenaVideoPlayerProps {
   videoUrl: string;
   poster?: string;
   autoPlay?: boolean;
+  muted?: boolean;
 }
 
 const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({ 
   videoUrl, 
   poster,
-  autoPlay = false 
+  autoPlay = false,
+  muted = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(1);
+  const hlsRef = useRef<Hls | null>(null);
+
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [volume, setVolume] = useState(muted ? 0 : 1);
   const [showControls, setShowControls] = useState(true);
   const [showCenterPause, setShowCenterPause] = useState(false);
-  const [isMuted, setIsMuted] = useState(autoPlay); // Mute if autoplay
+  const [isMuted, setIsMuted] = useState(muted);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Autoplay effect
+  // HLS Playback Logic
   useEffect(() => {
-    if (autoPlay && videoRef.current) {
-      videoRef.current.muted = true;
-      setIsMuted(true);
-      videoRef.current.play().catch(err => {
-        console.log("Autoplay prevented:", err);
-      });
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
     }
-  }, [autoPlay]);
+
+    if (videoUrl && videoUrl.includes('.m3u8')) {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hlsRef.current = hls;
+        hls.loadSource(videoUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (autoPlay) {
+            video.muted = muted;
+            video.play().catch(e => console.error("Autoplay was prevented.", e));
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = videoUrl;
+      }
+    } else {
+      video.src = videoUrl;
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+      }
+    };
+  }, [videoUrl, autoPlay, muted]);
 
   // Fade out controls
   const handleUserActivity = () => {
     setShowControls(true);
     if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
-    controlsTimeout.current = setTimeout(() => setShowControls(false), 2000);
+    controlsTimeout.current = setTimeout(() => setShowControls(false), 3000);
   };
 
   useEffect(() => {
+    handleUserActivity(); // Show controls on mount
     return () => {
       if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
     };
@@ -59,12 +82,13 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
 
   // Fullscreen logic
   const toggleFullscreen = () => {
+    const container = videoRef.current?.parentElement;
+    if (!container) return;
+
     if (!document.fullscreenElement) {
-      videoRef.current?.parentElement?.requestFullscreen();
-      setIsFullscreen(true);
+      container.requestFullscreen().catch(err => console.error(`Fullscreen request failed: ${err.message}`));
     } else {
       document.exitFullscreen();
-      setIsFullscreen(false);
     }
     handleUserActivity();
   };
@@ -74,50 +98,38 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     const video = videoRef.current;
     if (!video) return;
 
-    if (isPlaying) {
+    if (video.paused) {
+      video.play();
+    } else {
       video.pause();
       setShowCenterPause(true);
       setTimeout(() => setShowCenterPause(false), 1000);
-    } else {
-      video.play();
     }
-    setIsPlaying(!isPlaying);
     handleUserActivity();
   };
 
-  // Keyboard shortcuts (e.g., Space = play/pause, arrows = skip)
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
-      if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
-      )
-        return;
-      if (e.code === "Space") {
+      if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
+      
+      // Prevent default browser actions for these keys
+      if (["Space", "ArrowLeft", "ArrowRight", "KeyM", "KeyF"].includes(e.code)) {
         e.preventDefault();
-        togglePlay();
       }
-      if (e.code === "ArrowLeft") {
-        e.preventDefault();
-        skip(-10);
-      }
-      if (e.code === "ArrowRight") {
-        e.preventDefault();
-        skip(10);
-      }
-      if (e.code === "KeyM") {
-        e.preventDefault();
-        toggleMute();
-      }
-      if (e.code === "KeyF") {
-        e.preventDefault();
-        toggleFullscreen();
+
+      switch(e.code) {
+        case "Space": togglePlay(); break;
+        case "ArrowLeft": skip(-10); break;
+        case "ArrowRight": skip(10); break;
+        case "KeyM": toggleMute(); break;
+        case "KeyF": toggleFullscreen(); break;
       }
     };
-    document.addEventListener("keydown", handleKeydown);
-    return () => document.removeEventListener("keydown", handleKeydown);
-    // eslint-disable-next-line
-  }, [isPlaying, isMuted, currentTime, duration, isFullscreen]);
+    const playerElement = videoRef.current?.parentElement;
+    playerElement?.addEventListener("keydown", handleKeydown);
+    return () => playerElement?.removeEventListener("keydown", handleKeydown);
+  }, [isPlaying, isMuted, currentTime, duration, isFullscreen]); // Re-bind if state changes
 
   // Progress/time logic
   const handleProgress = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,79 +140,89 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
   const skip = (howMuch: number) => {
-    if (!videoRef.current) return;
-    const seekTo = Math.max(0, Math.min((videoRef.current.currentTime || 0) + howMuch, duration));
-    videoRef.current.currentTime = seekTo;
-    setCurrentTime(seekTo);
+    if (!videoRef.current || duration === Infinity) return; // Disable skip for live streams
+    const newTime = videoRef.current.currentTime + howMuch;
+    videoRef.current.currentTime = Math.max(0, Math.min(newTime, duration));
     handleUserActivity();
   };
 
-  // Volume
+  // Volume logic
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
     if (videoRef.current) {
       videoRef.current.volume = newVolume;
-      if (newVolume === 0) {
-        videoRef.current.muted = true;
-        setIsMuted(true);
-      } else {
-        videoRef.current.muted = false;
-        setIsMuted(false);
-      }
+      const muted = newVolume === 0;
+      videoRef.current.muted = muted;
+      setIsMuted(muted);
     }
     handleUserActivity();
   };
   const toggleMute = () => {
     if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
+      const currentlyMuted = !videoRef.current.muted;
+      videoRef.current.muted = currentlyMuted;
+      setIsMuted(currentlyMuted);
+      if (!currentlyMuted && volume === 0) {
+        const newVolume = 1;
+        setVolume(newVolume);
+        videoRef.current.volume = newVolume;
+      }
     }
     handleUserActivity();
   };
 
-  // Video events
+  // Video event listeners
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     const updateTime = () => setCurrentTime(video.currentTime);
-    const updateDuration = () => setDuration(video.duration || 0);
+    const updateDuration = () => setDuration(video.duration);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
 
     video.addEventListener("timeupdate", updateTime);
     video.addEventListener("loadedmetadata", updateDuration);
+    video.addEventListener("durationchange", updateDuration);
     video.addEventListener("play", handlePlay);
     video.addEventListener("pause", handlePause);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
       video.removeEventListener("timeupdate", updateTime);
       video.removeEventListener("loadedmetadata", updateDuration);
+      video.removeEventListener("durationchange", updateDuration);
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
 
-  // Time helpers
   const formatTime = (t: number) => {
-    if (!t || isNaN(t)) return "0:00";
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
+    if (!t || !isFinite(t)) return "0:00";
+    const minutes = Math.floor(t / 60);
+    const seconds = Math.floor(t % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
+  
+  const isLiveStream = duration === Infinity;
 
   return (
     <div
-      className="relative w-full h-full bg-black rounded-2xl overflow-hidden group"
+      className="relative w-full h-full bg-black rounded-xl overflow-hidden group"
       onMouseMove={handleUserActivity}
+      onMouseLeave={handleUserActivity}
       onTouchStart={handleUserActivity}
       tabIndex={0}
     >
       <video
         ref={videoRef}
         className="w-full h-full object-cover"
-        src={videoUrl}
         poster={poster}
         onClick={togglePlay}
+        muted={muted}
+        autoPlay={autoPlay}
+        playsInline
       />
 
       {showCenterPause && (
@@ -209,86 +231,55 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Control Bar (All icons shown) */}
       <div
         className={`absolute bottom-0 left-0 right-0 flex flex-col gap-2 p-4 
           bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-500 z-10
           ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        onClick={e => e.stopPropagation()}
-        onMouseEnter={() => setShowControls(true)}
-        onMouseLeave={handleUserActivity}
       >
-        {/* Progress + Time bar */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-white opacity-80 w-10 text-right">
-            {formatTime(currentTime)}
-          </span>
-          <input
-            type="range"
-            min={0}
-            step={0.01}
-            max={duration}
-            value={currentTime}
-            onChange={handleProgress}
-            className="flex-1 accent-emerald-500 slider-thumb:rounded-full slider-thumb:w-2 slider-thumb:h-2"
-          />
-          <span className="text-xs text-white opacity-80 w-10">
-            {formatTime(duration)}
-          </span>
-        </div>
-        {/* Icon bar */}
+        {!isLiveStream && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white opacity-80 w-10 text-right">
+              {formatTime(currentTime)}
+            </span>
+            <input
+              type="range" min={0} step={0.01} max={duration} value={currentTime}
+              onChange={handleProgress}
+              className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-emerald-500"
+            />
+            <span className="text-xs text-white opacity-80 w-10">
+              {formatTime(duration)}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <button
-              onClick={togglePlay}
-              className="cursor-pointer text-white hover:text-emerald-400 p-2 rounded-full transition"
-              tabIndex={0}
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
+            <button onClick={togglePlay} className="p-2 text-white hover:text-emerald-400 transition" aria-label={isPlaying ? "Pause" : "Play"}>
               {isPlaying ? <Pause size={24} /> : <Play size={24} />}
             </button>
-            <button
-              className="cursor-pointer text-white hover:text-emerald-400 p-2 rounded-full transition"
-              tabIndex={0}
-              onClick={() => skip(-10)}
-              aria-label="Rewind 10 seconds"
-            >
-              <RotateCcw size={22} />
-            </button>
-            <button
-              className="cursor-pointer text-white hover:text-emerald-400 p-2 rounded-full transition"
-              tabIndex={0}
-              onClick={() => skip(10)}
-              aria-label="Forward 10 seconds"
-            >
-              <RotateCw size={22} />
-            </button>
-            {/* Volume Control */}
-            <button
-              onClick={toggleMute}
-              className="cursor-pointer text-white hover:text-emerald-400 p-2 rounded-full transition"
-              tabIndex={0}
-              aria-label={isMuted ? "Unmute" : "Mute"}
-            >
-              {isMuted || volume === 0 ? <VolumeX size={22} /> : <Volume2 size={22} />}
-            </button>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={volume}
-              onChange={handleVolumeChange}
-              className="w-24 accent-emerald-500 cursor-pointer"
-            />
+            {!isLiveStream && (
+              <>
+                <button onClick={() => skip(-10)} className="p-2 text-white hover:text-emerald-400 transition" aria-label="Rewind 10 seconds">
+                  <RotateCcw size={22} />
+                </button>
+                <button onClick={() => skip(10)} className="p-2 text-white hover:text-emerald-400 transition" aria-label="Forward 10 seconds">
+                  <RotateCw size={22} />
+                </button>
+              </>
+            )}
+            <div className="flex items-center">
+              <button onClick={toggleMute} className="p-2 text-white hover:text-emerald-400 transition" aria-label={isMuted ? "Unmute" : "Mute"}>
+                {isMuted || volume === 0 ? <VolumeX size={22} /> : <Volume2 size={22} />}
+              </button>
+              <input
+                type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-24 h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-emerald-500"
+              />
+            </div>
           </div>
-          <div>
-            <button
-              className="mx-2 cursor-pointer text-white hover:text-emerald-400 p-2 rounded-full transition"
-              tabIndex={0}
-              onClick={toggleFullscreen}
-              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-            >
+          <div className="flex items-center">
+            {isLiveStream && <div className="mr-4 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded">LIVE</div>}
+            <button onClick={toggleFullscreen} className="p-2 text-white hover:text-emerald-400 transition" aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}>
               {isFullscreen ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
             </button>
           </div>

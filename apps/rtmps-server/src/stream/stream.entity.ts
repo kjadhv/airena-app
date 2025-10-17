@@ -20,7 +20,6 @@ export class Stream {
   @Column()
   streamUrl!: string;
 
-  // Standardized to 'user_id' for consistency
   @Column({ name: "user_id" })
   userId!: string;
 
@@ -36,8 +35,9 @@ export class Stream {
 
   @Column({ nullable: true })
   description?: string;
-  
-  // ✨ NEW: Added a field to store the thumbnail URL.
+
+  // --- NEW FIELD ---
+  // Added a column to store the public URL of the uploaded thumbnail.
   @Column({ name: 'thumbnail_url', nullable: true, type: 'text' })
   thumbnailUrl?: string;
 

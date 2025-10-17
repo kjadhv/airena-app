@@ -3,15 +3,16 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { ConfigService } from '@nestjs/config';
+import { Bucket } from '@google-cloud/storage';
 
 @Injectable()
 export class FirebaseService implements OnModuleInit {
-  private bucket: any; // Using any since Bucket type isn't exported properly
+  private app: admin.app.App; 
+  private bucket!: Bucket;
   private readonly logger = new Logger(FirebaseService.name);
 
-  constructor(private readonly configService: ConfigService) {}
-
-  onModuleInit() {
+  constructor(private readonly configService: ConfigService) {
+    // Initialize Firebase in constructor instead of onModuleInit
     const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
     const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
     const privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
@@ -27,21 +28,37 @@ export class FirebaseService implements OnModuleInit {
     };
 
     if (!admin.apps.length) {
-      admin.initializeApp({
+      this.app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
         storageBucket: `${serviceAccount.projectId}.appspot.com`,
       });
+    } else {
+      this.app = admin.app();
     }
+  }
 
-    this.bucket = admin.storage().bucket();
+  onModuleInit() {
+    this.bucket = this.app.storage().bucket();
     this.logger.log('Firebase Admin SDK initialized successfully.');
+  }
+  
+  getFirestore(): admin.firestore.Firestore {
+    if (!this.app) {
+      throw new Error('Firebase app is not initialized');
+    }
+    return this.app.firestore();
+  }
+
+  getAuth(): admin.auth.Auth {
+    if (!this.app) {
+      throw new Error('Firebase app is not initialized');
+    }
+    return this.app.auth();
   }
 
   async uploadDirectory(directoryPath: string, destinationPath: string): Promise<string> {
     this.logger.log(`Uploading directory ${directoryPath} to ${destinationPath}...`);
     
-    // TODO: Implement actual directory upload logic
-    // This is just returning a URL for now - you'll need to actually upload the files
     const fs = require('fs').promises;
     const path = require('path');
     

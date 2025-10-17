@@ -1,19 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
-  // Use environment variable for CORS origin
+  // Firebase is now initialized in FirebaseService - no need to initialize here
+
   app.enableCors({
     origin: process.env.FRONTEND_URL || '*',
     credentials: true,
   });
 
-  // The NmsService will now start automatically via onModuleInit.
   const port = process.env.PORT || 3000;
-  await app.listen(port); // NestJS API server port
+  await app.listen(port);
   console.log(`Application is running on: ${await app.getUrl()}`);
-  console.log('Node Media Server is running on RTMP port 1935 and HTTP port 8000');
 }
 bootstrap();
