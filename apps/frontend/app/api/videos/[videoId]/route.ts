@@ -28,12 +28,10 @@ export async function PUT(
             return NextResponse.json({ error: 'Video not found' }, { status: 404 });
         }
 
-        // Security Check: Ensure the user owns the video they are trying to edit
         if (videoDoc.data()?.authorId !== decodedToken.uid) {
             return NextResponse.json({ error: 'Forbidden: You do not have permission to edit this video.' }, { status: 403 });
         }
 
-        // Prepare update data with a more specific type to avoid 'any'
         const updateData: { [key: string]: string | string[] } = {
             title,
             description,
@@ -42,7 +40,6 @@ export async function PUT(
             visibility,
         };
 
-        // Only update the thumbnail if a new one was provided
         if (thumbnailUrl) {
             updateData.thumbnailUrl = thumbnailUrl;
         }
@@ -78,7 +75,6 @@ export async function DELETE(
             return NextResponse.json({ error: 'Video not found' }, { status: 404 });
         }
 
-        // Security Check: Ensure the user owns the video they are trying to delete
         if (videoDoc.data()?.authorId !== decodedToken.uid) {
             return NextResponse.json({ error: 'Forbidden: You do not have permission to delete this video.' }, { status: 403 });
         }
@@ -93,20 +89,25 @@ export async function DELETE(
     }
 }
 
-// --- INCREMENT video views (POST) - REVISED FOR UNIQUE VIEWS ---
+// --- INCREMENT video views (POST) - REVISED FOR UNIQUE VIEWS & ROBUSTNESS ---
 export async function POST(
     req: NextRequest,
-    context: { params: Promise<{ videoId:string }> }
+    context: { params: Promise<{ videoId: string }> }
 ) {
     try {
         const { videoId } = await context.params;
+        const videoRef = db.collection('videos').doc(videoId);
+
+        // ✅ Check if the video document exists right at the beginning
+        const videoDoc = await videoRef.get();
+        if (!videoDoc.exists) {
+            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+        }
         
-        // Check for an authenticated user
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         
         // Handle anonymous users (no token provided)
         if (!idToken) {
-            const videoRef = db.collection('videos').doc(videoId);
             await videoRef.update({ views: FieldValue.increment(1) });
             return NextResponse.json({ message: 'Anonymous view counted' }, { status: 200 });
         }
@@ -115,28 +116,19 @@ export async function POST(
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         const userId = decodedToken.uid;
 
-        // Check if this user has already viewed the video in the 'viewedBy' subcollection
-        const viewRef = db.collection('videos').doc(videoId).collection('viewedBy').doc(userId);
-        const viewDoc = await viewRef.get();
+        const viewRef = videoRef.collection('viewedBy').doc(userId);
+        const userViewDoc = await viewRef.get();
 
-        // If the document exists, the user's view has already been counted. Do nothing.
-        if (viewDoc.exists) {
+        if (userViewDoc.exists) {
             return NextResponse.json({ message: 'User has already viewed this video' }, { status: 200 });
         }
 
-        // If it's a new view, record it and increment the total count using a batch
-        const videoRef = db.collection('videos').doc(videoId);
         const batch = db.batch();
-
-        // Add a document with the user's ID to the 'viewedBy' subcollection
         batch.set(viewRef, { viewedAt: FieldValue.serverTimestamp() });
-        
-        // Atomically increment the main view count on the video document
         batch.update(videoRef, {
             views: FieldValue.increment(1)
         });
 
-        // Commit the batch
         await batch.commit();
 
         return NextResponse.json({ message: 'View count updated successfully' }, { status: 201 });

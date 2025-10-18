@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react"; // 👈 1. Imported useRef
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Users } from "lucide-react";
 import { doc, onSnapshot, Timestamp } from "firebase/firestore";
@@ -32,7 +32,7 @@ const VideoPlayerPage = () => {
   const [videoData, setVideoData] = useState<VideoData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [videoId, setVideoId] = useState<string | null>(null);
-  const viewLoggedRef = useRef(false); // 👈 2. Added a ref to track if the view was logged
+  const viewLoggedRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -60,36 +60,45 @@ const VideoPlayerPage = () => {
     return () => unsubscribe();
   }, [videoId]);
 
-  // 👇 3. This is the new, corrected useEffect for logging views
+  // This useEffect handles logging the unique view for the video
   useEffect(() => {
     const logView = async () => {
-      // Check if we have a videoId AND if the view has NOT been logged yet in this session
+      // Run only if we have a videoId and haven't already logged a view this session
       if (videoId && !viewLoggedRef.current) {
-        // Immediately mark the view as logged to prevent this from running again
+        // Immediately set the flag to true to prevent re-runs
         viewLoggedRef.current = true;
 
         try {
           const headers = new Headers();
-          // If the user is authenticated, get their token for the API call
           if (user) {
             const token = await user.getIdToken();
             headers.append('Authorization', `Bearer ${token}`);
           }
-          // Call the secure backend API
-          await fetch(`/api/frontend/videos/${videoId}`, {
+          
+          // ✅ FIXED: Call the correct API path
+          const response = await fetch(`/api/videos/${videoId}`, {
             method: 'POST',
             headers: headers,
           });
+
+          // ✅ Check if the API returned an error (e.g., 404, 500)
+          if (!response.ok) {
+            throw new Error(`API call failed with status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          console.log('View logged:', data.message);
+
         } catch (error) {
-          // If the API call fails, reset the flag so it can try again on a future render
-          viewLoggedRef.current = false;
+          // This block now catches both network errors and API errors
+          viewLoggedRef.current = false; // Reset the flag so it can try again later
           console.error("Failed to log view:", error);
         }
       }
     };
 
     logView();
-  }, [videoId, user]); // Effect runs when videoId or user is ready
+  }, [videoId, user]);
 
   if (isLoading) {
     return (
@@ -170,4 +179,4 @@ const VideoPlayerPage = () => {
   );
 };
 
-export default VideoPlayerPage;
+export default VideoPlayerPage; 
