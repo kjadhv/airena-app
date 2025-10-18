@@ -93,27 +93,53 @@ export async function DELETE(
     }
 }
 
-// --- INCREMENT video views (POST) ---
+// --- INCREMENT video views (POST) - REVISED FOR UNIQUE VIEWS ---
 export async function POST(
     req: NextRequest,
-    context: { params: Promise<{ videoId: string }> }
+    context: { params: Promise<{ videoId:string }> }
 ) {
     try {
         const { videoId } = await context.params;
         
-        const videoRef = db.collection('videos').doc(videoId);
-        const videoDoc = await videoRef.get();
+        // Check for an authenticated user
+        const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
+        
+        // Handle anonymous users (no token provided)
+        if (!idToken) {
+            const videoRef = db.collection('videos').doc(videoId);
+            await videoRef.update({ views: FieldValue.increment(1) });
+            return NextResponse.json({ message: 'Anonymous view counted' }, { status: 200 });
+        }
+        
+        // Handle authenticated users
+        const decodedToken = await authAdmin.verifyIdToken(idToken);
+        const userId = decodedToken.uid;
 
-        if (!videoDoc.exists) {
-            return NextResponse.json({ error: 'Video not found' }, { status: 404 });
+        // Check if this user has already viewed the video in the 'viewedBy' subcollection
+        const viewRef = db.collection('videos').doc(videoId).collection('viewedBy').doc(userId);
+        const viewDoc = await viewRef.get();
+
+        // If the document exists, the user's view has already been counted. Do nothing.
+        if (viewDoc.exists) {
+            return NextResponse.json({ message: 'User has already viewed this video' }, { status: 200 });
         }
 
-        // Atomically increment the view count on the server
-        await videoRef.update({
+        // If it's a new view, record it and increment the total count using a batch
+        const videoRef = db.collection('videos').doc(videoId);
+        const batch = db.batch();
+
+        // Add a document with the user's ID to the 'viewedBy' subcollection
+        batch.set(viewRef, { viewedAt: FieldValue.serverTimestamp() });
+        
+        // Atomically increment the main view count on the video document
+        batch.update(videoRef, {
             views: FieldValue.increment(1)
         });
 
-        return NextResponse.json({ message: 'View count updated successfully' }, { status: 200 });
+        // Commit the batch
+        await batch.commit();
+
+        return NextResponse.json({ message: 'View count updated successfully' }, { status: 201 });
 
     } catch (error: unknown) {
         console.error('API Error updating view count:', (error as Error).message);

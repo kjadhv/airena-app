@@ -1,8 +1,8 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react"; // 👈 1. Imported useRef
 import Link from "next/link";
 import { Users } from "lucide-react";
-import { doc, updateDoc, increment, onSnapshot, Timestamp } from "firebase/firestore";
+import { doc, onSnapshot, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/app/context/AuthContext";
 import Header from "@/app/components/Sidebar";
 import Footer from "@/app/components/Footer";
@@ -32,6 +32,7 @@ const VideoPlayerPage = () => {
   const [videoData, setVideoData] = useState<VideoData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [videoId, setVideoId] = useState<string | null>(null);
+  const viewLoggedRef = useRef(false); // 👈 2. Added a ref to track if the view was logged
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -59,22 +60,42 @@ const VideoPlayerPage = () => {
     return () => unsubscribe();
   }, [videoId]);
 
+  // 👇 3. This is the new, corrected useEffect for logging views
   useEffect(() => {
-    if (!videoId || !videoData) return;
-    const viewedFlag = `viewed-video-${videoId}`;
-    if (!sessionStorage.getItem(viewedFlag)) {
-      updateDoc(doc(db, "videos", videoId), { views: increment(1) })
-        .then(() => sessionStorage.setItem(viewedFlag, "true"))
-        .catch(() => {});
-    }
-  }, [videoId, videoData]);
+    const logView = async () => {
+      // Check if we have a videoId AND if the view has NOT been logged yet in this session
+      if (videoId && !viewLoggedRef.current) {
+        // Immediately mark the view as logged to prevent this from running again
+        viewLoggedRef.current = true;
+
+        try {
+          const headers = new Headers();
+          // If the user is authenticated, get their token for the API call
+          if (user) {
+            const token = await user.getIdToken();
+            headers.append('Authorization', `Bearer ${token}`);
+          }
+          // Call the secure backend API
+          await fetch(`/api/frontend/videos/${videoId}`, {
+            method: 'POST',
+            headers: headers,
+          });
+        } catch (error) {
+          // If the API call fails, reset the flag so it can try again on a future render
+          viewLoggedRef.current = false;
+          console.error("Failed to log view:", error);
+        }
+      }
+    };
+
+    logView();
+  }, [videoId, user]); // Effect runs when videoId or user is ready
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center">
         <Header />
         <div className="pt-28 flex-grow flex items-center justify-center">
-          {/* Skeleton Loader */}
           <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
         </div>
         <Footer />
