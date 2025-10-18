@@ -1,37 +1,70 @@
-// File: app/api/posts/[postId]/view/route.ts
-
-import { NextResponse } from 'next/server';
-import { db } from '@/app/firebase/firebaseAdmin'; // Make sure you're using the admin SDK here
+import { NextRequest, NextResponse } from 'next/server';
+import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ postId: string }> }
+  req: NextRequest,
+  context: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const { postId } = await params;
+    const { postId } = await context.params;
+    
+    console.log(' View tracking called for post:', postId);
     
     if (!postId) {
       return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
     }
 
     const postRef = db.collection('posts').doc(postId);
-    const doc = await postRef.get();
-
-    if (!doc.exists) {
+    const postDoc = await postRef.get();
+    
+    if (!postDoc.exists) {
+      console.error(' Post not found:', postId);
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    // Atomically increment the views count on the server
-    await postRef.update({
-      views: FieldValue.increment(1)
-    });
+    const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
+        
+    // Handle anonymous users
+    if (!idToken) {
+      console.log('👤 Anonymous view - incrementing');
+      await postRef.update({ views: FieldValue.increment(1) });
+      return NextResponse.json({ message: 'Anonymous view counted' }, { status: 200 });
+    }
+    
+    // Handle authenticated users
+    try {
+      const decodedToken = await authAdmin.verifyIdToken(idToken);
+      const userId = decodedToken.uid;
+      
+      console.log(' Authenticated user:', userId);
 
-    return NextResponse.json({ message: 'View count updated successfully' }, { status: 200 });
+      const viewRef = postRef.collection('viewedBy').doc(userId);
+      const userViewDoc = await viewRef.get();
+
+      if (userViewDoc.exists) {
+        console.log('User already viewed this post');
+        return NextResponse.json({ message: 'User has already viewed this post' }, { status: 200 });
+      }
+
+      console.log(' New view - incrementing count');
+      const batch = db.batch();
+      batch.set(viewRef, { viewedAt: FieldValue.serverTimestamp() });
+      batch.update(postRef, { views: FieldValue.increment(1) });
+      await batch.commit();
+
+      console.log(' View count updated successfully');
+      return NextResponse.json({ message: 'View count updated successfully' }, { status: 201 });
+      
+    } catch (authError) {
+      console.error('Token verification failed:', authError);
+      await postRef.update({ views: FieldValue.increment(1) });
+      return NextResponse.json({ message: 'Anonymous view counted (invalid token)' }, { status: 200 });
+    }
 
   } catch (error: unknown) {
-    console.error('API Error updating view count:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error(' API Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
   }
 }

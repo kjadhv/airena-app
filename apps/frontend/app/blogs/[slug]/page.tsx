@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { doc, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "@/app/firebase/config";
-import { CalendarDays, ArrowLeft, Clock, User, Share2, Bookmark } from "lucide-react";
+import { CalendarDays, ArrowLeft, Clock, User, Share2, Bookmark, Eye } from "lucide-react";
 import dynamic from "next/dynamic";
 import { processContentForEmbeds } from "@/app/lib/processContent";
 import ReadingProgress from "@/app/components/ReadingProgress";
+import ReactionBar from "@/app/components/ReactionBar";
+import { useAuth } from "@/app/context/AuthContext";
 
 const CommentSection = dynamic(() => import("@/app/components/CommentSection"), {
   ssr: false,
@@ -22,59 +24,153 @@ interface BlogPost {
   createdAt: Date;
   slug: string;
   imageUrl?: string;
+  views: number;
 }
 
 export default function BlogPostPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const slug = params?.slug as string;
 
   const [post, setPost] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [readingTime, setReadingTime] = useState(0);
+  
+  const viewLoggedRef = useRef(false);
+  const postIdRef = useRef<string | null>(null);
 
+  // Fetch post with real-time updates
   useEffect(() => {
-    async function fetchPost() {
-      if (!slug) return;
+    if (!slug) return;
+
+    console.log('🔍 Fetching post with slug:', slug);
+    
+    // Query to find post by slug
+    const fetchPostBySlug = async () => {
       try {
+        const { collection, query, where, getDocs } = await import("firebase/firestore");
         const postsRef = collection(db, "posts");
         const q = query(postsRef, where("slug", "==", slug));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
+          console.error('❌ No post found with slug:', slug);
           setError(true);
           setLoading(false);
-          return;
+          return null;
         }
 
-        const doc = querySnapshot.docs[0];
-        const data = doc.data();
-        const createdAtTimestamp = data.createdAt as Timestamp;
-        const processedContent = processContentForEmbeds(data.content);
-        const wordCount = data.content.replace(/<[^>]*>/g, "").split(/\s+/).length;
-        const minutes = Math.ceil(wordCount / 200);
-
-        setPost({
-          id: doc.id,
-          title: data.title,
-          content: processedContent,
-          authorName: data.authorName,
-          createdAt: createdAtTimestamp.toDate(),
-          slug: data.slug,
-          imageUrl: data.imageUrl,
-        });
-        setReadingTime(minutes);
+        const docSnap = querySnapshot.docs[0];
+        console.log('✅ Found post:', docSnap.id);
+        return docSnap.id;
       } catch (err) {
-        console.error("Error fetching post:", err);
+        console.error("Error finding post:", err);
         setError(true);
-      } finally {
         setLoading(false);
+        return null;
       }
-    }
+    };
 
-    fetchPost();
+    const setupListener = async () => {
+      const postId = await fetchPostBySlug();
+      if (!postId) return;
+
+      postIdRef.current = postId;
+
+      // Set up real-time listener on the document
+      const postDocRef = doc(db, "posts", postId);
+      const unsubscribe = onSnapshot(
+        postDocRef,
+        (docSnap) => {
+          if (!docSnap.exists()) {
+            console.error('❌ Post document no longer exists');
+            setError(true);
+            setLoading(false);
+            return;
+          }
+
+          const data = docSnap.data();
+          const createdAtTimestamp = data.createdAt as Timestamp;
+          const processedContent = processContentForEmbeds(data.content);
+          const wordCount = data.content.replace(/<[^>]*>/g, "").split(/\s+/).length;
+          const minutes = Math.ceil(wordCount / 200);
+
+          console.log('📄 Post data updated. Views:', data.views || 0);
+
+          setPost({
+            id: docSnap.id,
+            title: data.title,
+            content: processedContent,
+            authorName: data.authorName,
+            createdAt: createdAtTimestamp.toDate(),
+            slug: data.slug,
+            imageUrl: data.imageUrl,
+            views: data.views || 0,
+          });
+          setReadingTime(minutes);
+          setLoading(false);
+        },
+        (err) => {
+          console.error("Error in real-time listener:", err);
+          setError(true);
+          setLoading(false);
+        }
+      );
+
+      return unsubscribe;
+    };
+
+    const unsubscribePromise = setupListener();
+    return () => {
+      unsubscribePromise.then((unsub) => {
+        if (unsub) unsub();
+      });
+    };
   }, [slug]);
+
+  // Log view when post loads
+  useEffect(() => {
+    const logView = async () => {
+      if (!postIdRef.current || viewLoggedRef.current) return;
+      
+      viewLoggedRef.current = true;
+      console.log('🎯 Attempting to log view for post:', postIdRef.current);
+      
+      try {
+        const headers = new Headers();
+        if (user) {
+          const token = await user.getIdToken();
+          headers.append('Authorization', `Bearer ${token}`);
+          console.log('🔑 Token added to request');
+        } else {
+          console.log('👤 No user - logging anonymous view');
+        }
+        
+        const response = await fetch(`/api/posts/${postIdRef.current}/view`, {
+          method: 'POST',
+          headers: headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ View logged successfully:', data.message);
+
+      } catch (err) {
+        viewLoggedRef.current = false;
+        console.error("❌ Failed to log view:", err);
+      }
+    };
+
+    // Only log view after we have the post ID
+    if (postIdRef.current) {
+      logView();
+    }
+  }, [postIdRef.current, user]);
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -200,7 +296,7 @@ export default function BlogPostPage() {
         {/* Blog Content */}
         <main className="max-w-3xl mx-auto px-6 md:px-8 py-16">
           {/* Meta Info */}
-          <div className="flex flex-wrap items-center justify-center gap-6 pb-10 mb-16 border-b border-gray-800/50 text-center">
+          <div className="flex flex-wrap items-center justify-center gap-6 pb-10 mb-10 text-center border-b border-gray-800/50">
             <div className="flex items-center gap-2 text-gray-400">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
                 <User className="w-5 h-5 text-white" />
@@ -227,7 +323,17 @@ export default function BlogPostPage() {
                 <Clock className="w-4 h-4 text-emerald-500" />
                 <span>{readingTime} min read</span>
               </div>
+              <span className="text-gray-700">•</span>
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-emerald-500" />
+                <span>{post.views.toLocaleString()} views</span>
+              </div>
             </div>
+          </div>
+
+          {/* Reaction Bar */}
+          <div className="flex justify-center mb-16 border-y border-gray-800/50 py-8">
+            <ReactionBar postId={post.id} collectionName="posts" />
           </div>
 
           {/* Article */}
