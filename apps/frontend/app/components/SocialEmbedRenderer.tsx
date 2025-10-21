@@ -1,12 +1,15 @@
 "use client";
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+
 
 declare global {
   interface Window {
     twttr?: {
       widgets: {
         load: (element?: HTMLElement) => void;
+        createTweet: (tweetId: string, element: HTMLElement, options?: Record<string, unknown>) => Promise<HTMLElement | null>;
       };
+      ready?: (callback: () => void) => void;
     };
     instgrm?: {
       Embeds: {
@@ -16,152 +19,521 @@ declare global {
   }
 }
 
+
 interface SocialEmbedRendererProps {
   content: string;
 }
 
+
+interface ScriptStatus {
+  twitter: 'idle' | 'loading' | 'loaded' | 'error';
+  instagram: 'idle' | 'loading' | 'loaded' | 'error';
+}
+
+
 const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [scriptStatus, setScriptStatus] = useState<ScriptStatus>({
+    twitter: 'idle',
+    instagram: 'idle'
+  });
+  const processedIdsRef = useRef<Set<string>>(new Set());
+  const retryCountRef = useRef<Map<string, number>>(new Map());
+  const maxRetries = 3;
 
-  useEffect(() => {
-    if (!contentRef.current) return;
 
-    const embedElements = contentRef.current.querySelectorAll('[data-social-embed]');
-    
-    embedElements.forEach((element) => {
-      const el = element as HTMLElement;
-      if (el.dataset.processed === 'true') return;
-
-      const src = el.getAttribute('data-src');
-      const type = el.getAttribute('data-type');
-      
-      if (!src || !type) return;
-      
-      let embedHtml = '';
-      
-      switch (type) {
-        case 'twitter':
-          embedHtml = `<blockquote class="twitter-tweet" data-theme="dark" data-conversation="none"><a href="${src}"></a></blockquote>`;
-          break;
-          
-        case 'youtube':
-          const youtubeId = extractYouTubeId(src);
-          if (youtubeId) {
-            embedHtml = `
-              <div class="relative w-full aspect-video my-12 rounded-2xl overflow-hidden shadow-2xl">
-                <iframe 
-                  src="https://www.youtube.com/embed/${youtubeId}?modestbranding=1&rel=0&controls=1" 
-                  frameborder="0" 
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowfullscreen
-                  class="w-full h-full"
-                ></iframe>
-              </div>`;
-          }
-          break;
-          
-        case 'instagram':
-          embedHtml = `
-            <div class="instagram-embed-wrapper">
-              <blockquote class="instagram-media" 
-                data-instgrm-captioned 
-                data-instgrm-permalink="${src}" 
-                data-instgrm-version="14">
-              </blockquote>
-            </div>`;
-          break;
+  // Load Twitter script
+  const loadTwitterScript = useCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      if (window.twttr) {
+        console.log('✅ Twitter script already loaded');
+        setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
+        resolve();
+        return;
       }
-      
-      if (embedHtml) {
-        el.innerHTML = embedHtml;
-        el.dataset.processed = 'true';
+
+
+      if (scriptStatus.twitter === 'loading') {
+        console.log('⏳ Twitter script already loading...');
+        return;
       }
-    });
-    
-    if (contentRef.current.querySelector('[data-type="twitter"]')) loadTwitterScript();
-    if (contentRef.current.querySelector('[data-type="instagram"]')) loadInstagramScript();
-    
-  }, [content]);
 
-  const extractYouTubeId = (url: string): string | null => {
-    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[7].length === 11) ? match[7] : null;
-  };
 
-  const loadTwitterScript = () => {
-    if (!window.twttr) {
+      console.log('📥 Loading Twitter script...');
+      setScriptStatus(prev => ({ ...prev, twitter: 'loading' }));
+
+
       const script = document.createElement('script');
       script.src = 'https://platform.twitter.com/widgets.js';
       script.async = true;
       script.charset = 'utf-8';
-      document.body.appendChild(script);
-    } else {
-      window.twttr.widgets.load(contentRef.current!);
-    }
-  };
-
-  const loadInstagramScript = () => {
-    if (!window.instgrm) {
-      const script = document.createElement('script');
-      script.src = '//www.instagram.com/embed.js';
-      script.async = true;
+      
       script.onload = () => {
-        if (window.instgrm?.Embeds?.process) {
-          window.instgrm.Embeds.process();
-        }
+        console.log('✅ Twitter script loaded successfully');
+        setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
+        resolve();
       };
+      
+      script.onerror = (error) => {
+        console.error('❌ Failed to load Twitter script:', error);
+        setScriptStatus(prev => ({ ...prev, twitter: 'error' }));
+        reject(error);
+      };
+
+
       document.body.appendChild(script);
-    } else if (window.instgrm?.Embeds?.process) {
-      window.instgrm.Embeds.process();
+    });
+  }, [scriptStatus.twitter]);
+
+
+  // Load Instagram script
+  const loadInstagramScript = useCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      if (window.instgrm?.Embeds) {
+        console.log('✅ Instagram script already loaded');
+        setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
+        resolve();
+        return;
+      }
+
+
+      if (scriptStatus.instagram === 'loading') {
+        console.log('⏳ Instagram script already loading...');
+        return;
+      }
+
+
+      console.log('📥 Loading Instagram script...');
+      setScriptStatus(prev => ({ ...prev, instagram: 'loading' }));
+
+
+      const script = document.createElement('script');
+      script.src = 'https://www.instagram.com/embed.js';
+      script.async = true;
+      
+      script.onload = () => {
+        console.log('✅ Instagram script loaded successfully');
+        setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
+        // Give Instagram a moment to initialize
+        setTimeout(() => {
+          if (window.instgrm?.Embeds?.process) {
+            try {
+              window.instgrm.Embeds.process();
+            } catch (e) {
+              console.error('Error processing Instagram embeds:', e);
+            }
+          }
+          resolve();
+        }, 100);
+      };
+      
+      script.onerror = (error) => {
+        console.error('❌ Failed to load Instagram script:', error);
+        setScriptStatus(prev => ({ ...prev, instagram: 'error' }));
+        reject(error);
+      };
+
+
+      document.body.appendChild(script);
+    });
+  }, [scriptStatus.instagram]);
+
+
+  // Extract YouTube ID from URL
+  const extractYouTubeId = useCallback((url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+
+
+    try {
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+      ];
+      
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) return match[1];
+      }
+      return null;
+    } catch (error) {
+      console.error('Error extracting YouTube ID:', error);
+      return null;
     }
-  };
+  }, []);
+
+
+  // Extract Tweet ID from URL
+  const extractTweetId = useCallback((url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+
+
+    try {
+      const match = url.match(/status(?:es)?\/(\d+)/);
+      return match ? match[1] : null;
+    } catch (error) {
+      console.error('Error extracting Tweet ID:', error);
+      return null;
+    }
+  }, []);
+
+
+  // Process YouTube embed
+  const processYouTubeEmbed = useCallback((element: HTMLElement, src: string, id: string) => {
+    try {
+      const youtubeId = id || extractYouTubeId(src);
+      if (!youtubeId) {
+        throw new Error('Invalid YouTube ID');
+      }
+
+
+      const embedHtml = `
+        <div class="youtube-embed-wrapper my-12">
+          <div class="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black">
+            <iframe 
+              src="https://www.youtube.com/embed/${youtubeId}?modestbranding=1&rel=0&controls=1" 
+              frameborder="0" 
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+              class="w-full h-full"
+              loading="lazy"
+              title="YouTube video player"
+            ></iframe>
+          </div>
+        </div>`;
+
+
+      element.innerHTML = embedHtml;
+      element.dataset.processed = 'true';
+      console.log('✅ YouTube embed processed:', youtubeId);
+      return true;
+    } catch (error) {
+      console.error('❌ YouTube embed error:', error);
+      return false;
+    }
+  }, [extractYouTubeId]);
+
+
+  // Process Twitter embed
+  const processTwitterEmbed = useCallback(async (element: HTMLElement, src: string, id: string) => {
+    try {
+      const tweetId = id || extractTweetId(src);
+      if (!tweetId) {
+        throw new Error('Invalid Tweet ID');
+      }
+
+
+      // Create container
+      element.innerHTML = '<div class="twitter-tweet-container flex justify-center my-12"></div>';
+      const container = element.querySelector('.twitter-tweet-container') as HTMLElement;
+
+
+      if (!container) {
+        throw new Error('Failed to create Twitter container');
+      }
+
+
+      // Method 1: Try createTweet API (most reliable)
+      if (window.twttr?.widgets?.createTweet) {
+        try {
+          const tweet = await window.twttr.widgets.createTweet(tweetId, container, {
+            theme: 'dark',
+            conversation: 'none',
+            cards: 'visible',
+            width: 550,
+            dnt: true
+          });
+
+
+          if (tweet) {
+            element.dataset.processed = 'true';
+            console.log('✅ Twitter embed processed (createTweet):', tweetId);
+            return true;
+          }
+        } catch (createError) {
+          console.warn('createTweet failed, trying fallback:', createError);
+        }
+      }
+
+
+      // Method 2: Fallback to blockquote
+      element.innerHTML = `
+        <div class="twitter-embed-wrapper flex justify-center my-12">
+          <blockquote class="twitter-tweet" data-theme="dark" data-conversation="none" data-dnt="true">
+            <a href="${src}"></a>
+          </blockquote>
+        </div>`;
+
+
+      if (window.twttr?.widgets?.load) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        window.twttr.widgets.load(element);
+        element.dataset.processed = 'true';
+        console.log('✅ Twitter embed processed (blockquote):', tweetId);
+        return true;
+      }
+
+
+      throw new Error('Twitter widgets not available');
+
+
+    } catch (error) {
+      console.error('❌ Twitter embed error:', error);
+      return false;
+    }
+  }, [extractTweetId]);
+
+
+  // Process Instagram embed
+  const processInstagramEmbed = useCallback((element: HTMLElement, src: string, id: string) => {
+    try {
+      const embedHtml = `
+        <div class="instagram-embed-wrapper flex justify-center my-12">
+          <blockquote class="instagram-media" 
+            data-instgrm-captioned 
+            data-instgrm-permalink="${src}" 
+            data-instgrm-version="14"
+            style="background:#000; border:1px solid #262626; border-radius:16px; margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
+            <a href="${src}" target="_blank" rel="noopener noreferrer">View on Instagram</a>
+          </blockquote>
+        </div>`;
+
+
+      element.innerHTML = embedHtml;
+
+
+      // Process Instagram embeds
+      if (window.instgrm?.Embeds?.process) {
+        setTimeout(() => {
+          try {
+            window.instgrm?.Embeds?.process();
+          } catch (e) {
+            console.error('Instagram process error:', e);
+          }
+        }, 100);
+      }
+
+
+      element.dataset.processed = 'true';
+      console.log('✅ Instagram embed processed:', id);
+      return true;
+    } catch (error) {
+      console.error('❌ Instagram embed error:', error);
+      return false;
+    }
+  }, []);
+
+
+  // Show fallback UI
+  const showFallback = useCallback((element: HTMLElement, src: string, type: string) => {
+    const platformEmoji = {
+      youtube: '🎥',
+      twitter: '🐦',
+      instagram: '📸'
+    }[type] || '🔗';
+
+
+    const platformName = {
+      youtube: 'YouTube',
+      twitter: 'Twitter/X',
+      instagram: 'Instagram'
+    }[type] || 'Social Media';
+
+
+    element.innerHTML = `
+      <div class="embed-fallback my-8 p-6 bg-gray-800/50 rounded-xl border border-gray-700 text-center max-w-2xl mx-auto">
+        <p class="text-gray-300 mb-3 text-lg">${platformEmoji} ${platformName} Post</p>
+        <a href="${src}" target="_blank" rel="noopener noreferrer" 
+           class="text-emerald-400 hover:text-emerald-300 underline break-all inline-block">
+          View original content →
+        </a>
+      </div>`;
+    element.dataset.processed = 'true';
+  }, []);
+
+
+  // Main processing function
+  const processEmbeds = useCallback(async () => {
+    if (!contentRef.current) return;
+
+
+    const embedElements = contentRef.current.querySelectorAll('[data-social-embed="true"]');
+    if (embedElements.length === 0) {
+      console.log('No embeds to process');
+      return;
+    }
+
+
+    console.log(`🔍 Found ${embedElements.length} embeds to process`);
+
+
+    for (const element of Array.from(embedElements)) {
+      const el = element as HTMLElement;
+      
+      // Skip if already processed
+      if (el.dataset.processed === 'true') {
+        continue;
+      }
+
+
+      const src = el.getAttribute('data-src');
+      const type = el.getAttribute('data-type');
+      const id = el.getAttribute('data-id') || '';
+
+
+      if (!src || !type) {
+        console.warn('⚠️ Missing src or type:', el);
+        continue;
+      }
+
+
+      // Check retry count
+      const embedKey = `${type}-${id}`;
+      const retryCount = retryCountRef.current.get(embedKey) || 0;
+
+
+      if (retryCount >= maxRetries) {
+        console.warn(`⚠️ Max retries reached for ${embedKey}`);
+        showFallback(el, src, type);
+        continue;
+      }
+
+
+      try {
+        let success = false;
+
+
+        switch (type) {
+          case 'youtube':
+            success = processYouTubeEmbed(el, src, id);
+            break;
+
+
+          case 'twitter':
+            if (scriptStatus.twitter === 'loaded') {
+              success = await processTwitterEmbed(el, src, id);
+            } else if (scriptStatus.twitter === 'error') {
+              showFallback(el, src, type);
+              success = true;
+            }
+            break;
+
+
+          case 'instagram':
+            if (scriptStatus.instagram === 'loaded') {
+              success = processInstagramEmbed(el, src, id);
+            } else if (scriptStatus.instagram === 'error') {
+              showFallback(el, src, type);
+              success = true;
+            }
+            break;
+
+
+          default:
+            console.warn('⚠️ Unknown embed type:', type);
+            showFallback(el, src, type);
+            success = true;
+        }
+
+
+        if (!success) {
+          retryCountRef.current.set(embedKey, retryCount + 1);
+          if (retryCount + 1 >= maxRetries) {
+            showFallback(el, src, type);
+          }
+        } else {
+          processedIdsRef.current.add(embedKey);
+        }
+
+
+      } catch (error) {
+        console.error(`❌ Error processing ${type} embed:`, error);
+        retryCountRef.current.set(embedKey, retryCount + 1);
+        if (retryCount + 1 >= maxRetries) {
+          showFallback(el, src, type);
+        }
+      }
+    }
+  }, [scriptStatus, processYouTubeEmbed, processTwitterEmbed, processInstagramEmbed, showFallback]);
+
+
+  // Initial effect: Load scripts if needed
+  useEffect(() => {
+    if (!content) return;
+
+
+    const hasTwitter = content.includes('data-type="twitter"');
+    const hasInstagram = content.includes('data-type="instagram"');
+
+
+    if (hasTwitter && scriptStatus.twitter === 'idle') {
+      loadTwitterScript().catch(console.error);
+    }
+
+
+    if (hasInstagram && scriptStatus.instagram === 'idle') {
+      loadInstagramScript().catch(console.error);
+    }
+  }, [content, scriptStatus.twitter, scriptStatus.instagram, loadTwitterScript, loadInstagramScript]);
+
+
+  // Process embeds when content or scripts change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      processEmbeds();
+    }, 200);
+
+
+    return () => clearTimeout(timer);
+  }, [content, scriptStatus, processEmbeds]);
+
 
   return (
     <>
       <style jsx global>{`
+        .youtube-embed-wrapper,
+        .twitter-embed-wrapper,
         .instagram-embed-wrapper {
           display: flex;
           justify-content: center;
-          margin: 3rem 0;
+          align-items: center;
         }
         
         .instagram-media {
-          max-width: 600px !important;
+          max-width: 540px !important;
           width: 100% !important;
-          background: #0a0a0a !important;
-          border: 1px solid #262626 !important;
-          border-radius: 16px !important;
+          margin: 0 auto !important;
         }
         
-        .instagram-media iframe {
-          background: #0a0a0a !important;
-          filter: brightness(0.95);
+        .twitter-tweet,
+        .twitter-tweet-container,
+        .twitter-tweet-container > * {
+          margin-left: auto !important;
+          margin-right: auto !important;
+          max-width: 550px !important;
         }
         
-        .instagram-media .caption {
-          background: #000 !important;
-          color: #fff !important;
+        .embed-fallback a {
+          word-break: break-word;
+          display: inline-block;
+          max-width: 100%;
         }
-        
-        .twitter-tweet {
-          margin: 3rem auto !important;
-          background: #0a0a0a !important;
-          border-color: #262626 !important;
-          max-width: 600px !important;
+
+
+        /* Loading states */
+        .twitter-tweet-container:empty::after {
+          content: "Loading tweet...";
+          display: block;
+          text-align: center;
+          padding: 3rem;
+          color: #9ca3af;
         }
-        
-        .twitter-tweet iframe {
-          background: #0a0a0a !important;
-        }
-        
-        .relative.w-full.aspect-video {
-          border: 1px solid rgba(100, 116, 139, 0.3);
-          background: #000;
-        }
-        
-        .relative.w-full.aspect-video iframe {
-          background: #000;
+
+
+        /* Ensure embeds are centered and responsive */
+        [data-social-embed] {
+          width: 100%;
+          display: flex;
+          justify-content: center;
         }
       `}</style>
       
@@ -173,5 +545,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     </>
   );
 };
+
 
 export default SocialEmbedRenderer;
