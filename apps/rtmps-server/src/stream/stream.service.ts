@@ -9,6 +9,8 @@ import { Express } from 'express';
 import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 import * as path from 'path';
+import { VideoService } from '../video/video.service';
+import { VodProcessorService } from "../vod-processor/vod-processor.service";
 
 export interface StreamCredentials {
   streamKey: string;
@@ -44,7 +46,8 @@ export class StreamService {
     private streamRepository: Repository<Stream>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private videoService: VideoService, // Inject VideoService
   ) {
     this.RTMP_SERVER_URL = this.configService.get<string>("RTMP_SERVER_URL", "rtmp://localhost:1935/live");
     this.HLS_BASE_URL = this.configService.get<string>("HLS_BASE_URL", "http://localhost:8000/live");
@@ -55,7 +58,6 @@ export class StreamService {
     }
     this.storageBucketName = bucketName;
     
-    // Log the bucket name to verify it's correct
     this.logger.log(`Firebase Storage bucket configured: ${this.storageBucketName}`);
   }
 
@@ -80,14 +82,12 @@ export class StreamService {
       stream = await this.createStreamForUser(user);
     }
     
-    // Try to upload thumbnail, but don't fail if it doesn't work
     let thumbnailUrl = '';
     try {
       thumbnailUrl = await this.saveThumbnailAndGetUrl(thumbnailFile, stream.streamKey);
       this.logger.log(`Thumbnail uploaded successfully: ${thumbnailUrl}`);
     } catch (error: any) {
       this.logger.error(`Thumbnail upload failed, using placeholder`, error.message);
-      // Use a placeholder instead of failing completely
       thumbnailUrl = `https://placehold.co/1600x900/000000/FFFFFF?text=${encodeURIComponent(detailsDto.title || 'Stream')}`;
     }
 
@@ -114,12 +114,10 @@ export class StreamService {
     this.logger.log(`Target bucket: ${this.storageBucketName}`);
     
     try {
-      // Get bucket without explicit name (uses default from initialization)
       const bucket = getStorage().bucket();
       
       this.logger.log(`Bucket obtained, checking if it exists...`);
       
-      // Verify bucket is accessible
       const [exists] = await bucket.exists();
       if (!exists) {
         throw new Error(`Storage bucket does not exist or is not accessible. Check your FIREBASE_STORAGE_BUCKET environment variable.`);
@@ -133,7 +131,6 @@ export class StreamService {
 
       this.logger.log(`Uploading to: ${fileName}`);
 
-      // Use save method (more reliable than streams)
       await fileUpload.save(file.buffer, {
         metadata: {
           contentType: file.mimetype,
@@ -144,7 +141,6 @@ export class StreamService {
 
       this.logger.log(`File uploaded, making it public...`);
 
-      // Make the file public
       await fileUpload.makePublic();
 
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
@@ -157,7 +153,6 @@ export class StreamService {
       this.logger.error(`Error message: ${error.message}`);
       this.logger.error(`Error code: ${error.code}`);
       
-      // Log the full error for debugging
       if (error.message?.includes('does not exist')) {
         this.logger.error(`BUCKET NOT FOUND! Current bucket name: ${this.storageBucketName}`);
         this.logger.error(`Please verify this bucket name exists in Firebase Console -> Storage`);
@@ -220,16 +215,61 @@ export class StreamService {
   }
 
   async updateStreamStatus(streamKey: string, isActive: boolean): Promise<void> {
-    const stream = await this.streamRepository.findOne({ where: { streamKey } });
+    const stream = await this.streamRepository.findOne({ 
+      where: { streamKey }, 
+      relations: ["user"] 
+    });
+    
     if (!stream) {
       this.logger.warn(`Stream not found for key ${streamKey}`);
       return;
     }
+    
+    const wasActive = stream.isActive;
     stream.isActive = isActive;
+    
     if (isActive) {
-        stream.lastActiveAt = new Date();
+      stream.lastActiveAt = new Date();
+      this.logger.log(`Stream ${streamKey} went LIVE`);
+    } else if (wasActive && !isActive) {
+      // Stream just ended - create VOD
+      this.logger.log(`Stream ${streamKey} ended - creating VOD`);
+      await this.createVODFromStream(stream);
     }
+    
     await this.streamRepository.save(stream);
+  }
+
+  /**
+   * Creates a VOD entry when a stream ends
+   * This assumes your media server has already saved HLS files in the appropriate directory
+   */
+  private async createVODFromStream(stream: Stream): Promise<void> {
+    try {
+      // The HLS URL for the VOD will be the same as the live stream URL
+      // but your media server should keep the files available after the stream ends
+      const vodHlsUrl = `${this.HLS_BASE_URL}/${stream.streamKey}/index.m3u8`;
+      
+      // Create the VOD record
+      const video = await this.videoService.createWithUploader(
+        {
+          title: stream.title || `${stream.user?.displayName}'s Stream`,
+          streamKey: stream.streamKey,
+          hlsUrl: vodHlsUrl,
+          thumbnailUrl: stream.thumbnailUrl || '',
+        },
+        stream.userId
+      );
+      
+      this.logger.log(`VOD created successfully for stream ${stream.streamKey} with video ID ${video.id}`);
+      
+      // Optionally: trigger background processing here
+      // await this.queueVideoProcessing(video.id);
+      
+    } catch (error: any) {
+      this.logger.error(`Failed to create VOD for stream ${stream.streamKey}`, error.message);
+      // Don't throw - we don't want to fail the stream status update if VOD creation fails
+    }
   }
 
   private async findOrCreateUser(userDto: { userId: string, email: string, displayName: string }): Promise<User> {

@@ -4,13 +4,16 @@ import { ConfigModule } from '@nestjs/config';
 import { StreamController } from './stream.controller';
 import { StreamService } from './stream.service';
 import { Stream } from './stream.entity';
-import { User } from './user.entity'; // <-- Import User entity
+import { User } from './user.entity';
+import { VideoModule } from '../video/video.module';
+import { VodProcessorModule } from '../vod-processor/vod-processor.module';
 
 @Module({
   imports: [
     ConfigModule,
-    // MODIFIED: Include User in forFeature
-    TypeOrmModule.forFeature([Stream, User]) 
+    TypeOrmModule.forFeature([Stream, User]),
+    VideoModule,
+    VodProcessorModule,
   ],
   controllers: [StreamController],
   providers: [StreamService],

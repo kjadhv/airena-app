@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-
 declare global {
   interface Window {
     twttr?: {
@@ -19,17 +18,14 @@ declare global {
   }
 }
 
-
 interface SocialEmbedRendererProps {
   content: string;
 }
-
 
 interface ScriptStatus {
   twitter: 'idle' | 'loading' | 'loaded' | 'error';
   instagram: 'idle' | 'loading' | 'loaded' | 'error';
 }
-
 
 const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -39,30 +35,30 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
   });
   const processedIdsRef = useRef<Set<string>>(new Set());
   const retryCountRef = useRef<Map<string, number>>(new Map());
+  const twitterLoadingPromiseRef = useRef<Promise<void> | null>(null);
+  const instagramLoadingPromiseRef = useRef<Promise<void> | null>(null);
   const maxRetries = 3;
 
-
-  // Load Twitter script
+  // 🔧 FIX: Load Twitter script with proper Promise handling
   const loadTwitterScript = useCallback(() => {
-    return new Promise<void>((resolve, reject) => {
-      if (window.twttr) {
-        console.log('✅ Twitter script already loaded');
-        setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
-        resolve();
-        return;
-      }
+    // If already loaded, return resolved promise
+    if (window.twttr) {
+      console.log('✅ Twitter script already loaded');
+      setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
+      return Promise.resolve();
+    }
 
+    // If already loading, return the existing promise
+    if (twitterLoadingPromiseRef.current) {
+      console.log('⏳ Twitter script already loading, waiting...');
+      return twitterLoadingPromiseRef.current;
+    }
 
-      if (scriptStatus.twitter === 'loading') {
-        console.log('⏳ Twitter script already loading...');
-        return;
-      }
+    // Create new loading promise
+    console.log('📥 Loading Twitter script...');
+    setScriptStatus(prev => ({ ...prev, twitter: 'loading' }));
 
-
-      console.log('📥 Loading Twitter script...');
-      setScriptStatus(prev => ({ ...prev, twitter: 'loading' }));
-
-
+    const promise = new Promise<void>((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://platform.twitter.com/widgets.js';
       script.async = true;
@@ -71,42 +67,43 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
       script.onload = () => {
         console.log('✅ Twitter script loaded successfully');
         setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
+        twitterLoadingPromiseRef.current = null;
         resolve();
       };
       
       script.onerror = (error) => {
         console.error('❌ Failed to load Twitter script:', error);
         setScriptStatus(prev => ({ ...prev, twitter: 'error' }));
+        twitterLoadingPromiseRef.current = null;
         reject(error);
       };
 
-
       document.body.appendChild(script);
     });
-  }, [scriptStatus.twitter]);
 
+    twitterLoadingPromiseRef.current = promise;
+    return promise;
+  }, []);
 
-  // Load Instagram script
+  // 🔧 FIX: Load Instagram script with proper Promise handling
   const loadInstagramScript = useCallback(() => {
-    return new Promise<void>((resolve, reject) => {
-      if (window.instgrm?.Embeds) {
-        console.log('✅ Instagram script already loaded');
-        setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
-        resolve();
-        return;
-      }
+    // If already loaded, return resolved promise
+    if (window.instgrm?.Embeds) {
+      console.log('✅ Instagram script already loaded');
+      setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
+      return Promise.resolve();
+    }
 
+    // If already loading, return the existing promise
+    if (instagramLoadingPromiseRef.current) {
+      console.log('⏳ Instagram script already loading, waiting...');
+      return instagramLoadingPromiseRef.current;
+    }
 
-      if (scriptStatus.instagram === 'loading') {
-        console.log('⏳ Instagram script already loading...');
-        return;
-      }
+    console.log('📥 Loading Instagram script...');
+    setScriptStatus(prev => ({ ...prev, instagram: 'loading' }));
 
-
-      console.log('📥 Loading Instagram script...');
-      setScriptStatus(prev => ({ ...prev, instagram: 'loading' }));
-
-
+    const promise = new Promise<void>((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://www.instagram.com/embed.js';
       script.async = true;
@@ -114,6 +111,8 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
       script.onload = () => {
         console.log('✅ Instagram script loaded successfully');
         setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
+        instagramLoadingPromiseRef.current = null;
+        
         // Give Instagram a moment to initialize
         setTimeout(() => {
           if (window.instgrm?.Embeds?.process) {
@@ -130,19 +129,20 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
       script.onerror = (error) => {
         console.error('❌ Failed to load Instagram script:', error);
         setScriptStatus(prev => ({ ...prev, instagram: 'error' }));
+        instagramLoadingPromiseRef.current = null;
         reject(error);
       };
 
-
       document.body.appendChild(script);
     });
-  }, [scriptStatus.instagram]);
 
+    instagramLoadingPromiseRef.current = promise;
+    return promise;
+  }, []);
 
   // Extract YouTube ID from URL
   const extractYouTubeId = useCallback((url: string): string | null => {
     if (!url || typeof url !== 'string') return null;
-
 
     try {
       const patterns = [
@@ -161,11 +161,9 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     }
   }, []);
 
-
   // Extract Tweet ID from URL
   const extractTweetId = useCallback((url: string): string | null => {
     if (!url || typeof url !== 'string') return null;
-
 
     try {
       const match = url.match(/status(?:es)?\/(\d+)/);
@@ -176,7 +174,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     }
   }, []);
 
-
   // Process YouTube embed
   const processYouTubeEmbed = useCallback((element: HTMLElement, src: string, id: string) => {
     try {
@@ -184,7 +181,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
       if (!youtubeId) {
         throw new Error('Invalid YouTube ID');
       }
-
 
       const embedHtml = `
         <div class="youtube-embed-wrapper my-12">
@@ -201,7 +197,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
           </div>
         </div>`;
 
-
       element.innerHTML = embedHtml;
       element.dataset.processed = 'true';
       console.log('✅ YouTube embed processed:', youtubeId);
@@ -212,25 +207,21 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     }
   }, [extractYouTubeId]);
 
-
   // Process Twitter embed
-  const processTwitterEmbed = useCallback(async (element: HTMLElement, src: string, id: string) => {
+  const processTwitterEmbed = useCallback(async (element: HTMLElement, src: string, id: string): Promise<boolean> => {
     try {
       const tweetId = id || extractTweetId(src);
       if (!tweetId) {
         throw new Error('Invalid Tweet ID');
       }
 
-
       // Create container
       element.innerHTML = '<div class="twitter-tweet-container flex justify-center my-12"></div>';
       const container = element.querySelector('.twitter-tweet-container') as HTMLElement;
 
-
       if (!container) {
         throw new Error('Failed to create Twitter container');
       }
-
 
       // Method 1: Try createTweet API (most reliable)
       if (window.twttr?.widgets?.createTweet) {
@@ -243,7 +234,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
             dnt: true
           });
 
-
           if (tweet) {
             element.dataset.processed = 'true';
             console.log('✅ Twitter embed processed (createTweet):', tweetId);
@@ -254,7 +244,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
         }
       }
 
-
       // Method 2: Fallback to blockquote
       element.innerHTML = `
         <div class="twitter-embed-wrapper flex justify-center my-12">
@@ -262,7 +251,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
             <a href="${src}"></a>
           </blockquote>
         </div>`;
-
 
       if (window.twttr?.widgets?.load) {
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -272,16 +260,13 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
         return true;
       }
 
-
       throw new Error('Twitter widgets not available');
-
 
     } catch (error) {
       console.error('❌ Twitter embed error:', error);
       return false;
     }
   }, [extractTweetId]);
-
 
   // Process Instagram embed
   const processInstagramEmbed = useCallback((element: HTMLElement, src: string, id: string) => {
@@ -297,9 +282,7 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
           </blockquote>
         </div>`;
 
-
       element.innerHTML = embedHtml;
-
 
       // Process Instagram embeds
       if (window.instgrm?.Embeds?.process) {
@@ -312,7 +295,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
         }, 100);
       }
 
-
       element.dataset.processed = 'true';
       console.log('✅ Instagram embed processed:', id);
       return true;
@@ -322,7 +304,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     }
   }, []);
 
-
   // Show fallback UI
   const showFallback = useCallback((element: HTMLElement, src: string, type: string) => {
     const platformEmoji = {
@@ -331,13 +312,11 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
       instagram: '📸'
     }[type] || '🔗';
 
-
     const platformName = {
       youtube: 'YouTube',
       twitter: 'Twitter/X',
       instagram: 'Instagram'
     }[type] || 'Social Media';
-
 
     element.innerHTML = `
       <div class="embed-fallback my-8 p-6 bg-gray-800/50 rounded-xl border border-gray-700 text-center max-w-2xl mx-auto">
@@ -350,21 +329,20 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     element.dataset.processed = 'true';
   }, []);
 
-
   // Main processing function
   const processEmbeds = useCallback(async () => {
-    if (!contentRef.current) return;
-
-
-    const embedElements = contentRef.current.querySelectorAll('[data-social-embed="true"]');
-    if (embedElements.length === 0) {
-      console.log('No embeds to process');
+    if (!contentRef.current) {
+      console.log('❌ No contentRef available');
       return;
     }
 
+    const embedElements = contentRef.current.querySelectorAll('[data-social-embed="true"]');
+    if (embedElements.length === 0) {
+      console.log('ℹ️ No embeds to process');
+      return;
+    }
 
     console.log(`🔍 Found ${embedElements.length} embeds to process`);
-
 
     for (const element of Array.from(embedElements)) {
       const el = element as HTMLElement;
@@ -374,22 +352,20 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
         continue;
       }
 
-
       const src = el.getAttribute('data-src');
       const type = el.getAttribute('data-type');
       const id = el.getAttribute('data-id') || '';
 
+      console.log(`🔄 Processing ${type} embed:`, { src, id });
 
       if (!src || !type) {
         console.warn('⚠️ Missing src or type:', el);
         continue;
       }
 
-
       // Check retry count
       const embedKey = `${type}-${id}`;
       const retryCount = retryCountRef.current.get(embedKey) || 0;
-
 
       if (retryCount >= maxRetries) {
         console.warn(`⚠️ Max retries reached for ${embedKey}`);
@@ -397,16 +373,13 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
         continue;
       }
 
-
       try {
         let success = false;
-
 
         switch (type) {
           case 'youtube':
             success = processYouTubeEmbed(el, src, id);
             break;
-
 
           case 'twitter':
             if (scriptStatus.twitter === 'loaded') {
@@ -414,9 +387,10 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
             } else if (scriptStatus.twitter === 'error') {
               showFallback(el, src, type);
               success = true;
+            } else {
+              console.log('⏳ Waiting for Twitter script...');
             }
             break;
-
 
           case 'instagram':
             if (scriptStatus.instagram === 'loaded') {
@@ -424,16 +398,16 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
             } else if (scriptStatus.instagram === 'error') {
               showFallback(el, src, type);
               success = true;
+            } else {
+              console.log('⏳ Waiting for Instagram script...');
             }
             break;
-
 
           default:
             console.warn('⚠️ Unknown embed type:', type);
             showFallback(el, src, type);
             success = true;
         }
-
 
         if (!success) {
           retryCountRef.current.set(embedKey, retryCount + 1);
@@ -443,7 +417,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
         } else {
           processedIdsRef.current.add(embedKey);
         }
-
 
       } catch (error) {
         console.error(`❌ Error processing ${type} embed:`, error);
@@ -455,37 +428,49 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     }
   }, [scriptStatus, processYouTubeEmbed, processTwitterEmbed, processInstagramEmbed, showFallback]);
 
-
-  // Initial effect: Load scripts if needed
+  // 🔧 FIX: Better script loading logic
   useEffect(() => {
     if (!content) return;
-
 
     const hasTwitter = content.includes('data-type="twitter"');
     const hasInstagram = content.includes('data-type="instagram"');
 
+    console.log('📊 Embed detection:', { hasTwitter, hasInstagram });
 
     if (hasTwitter && scriptStatus.twitter === 'idle') {
-      loadTwitterScript().catch(console.error);
+      console.log('🚀 Initiating Twitter script load');
+      loadTwitterScript().catch(err => {
+        console.error('Failed to load Twitter script:', err);
+      });
     }
 
-
     if (hasInstagram && scriptStatus.instagram === 'idle') {
-      loadInstagramScript().catch(console.error);
+      console.log('🚀 Initiating Instagram script load');
+      loadInstagramScript().catch(err => {
+        console.error('Failed to load Instagram script:', err);
+      });
     }
   }, [content, scriptStatus.twitter, scriptStatus.instagram, loadTwitterScript, loadInstagramScript]);
 
-
   // Process embeds when content or scripts change
   useEffect(() => {
+    console.log('🔄 Processing embeds with status:', scriptStatus);
     const timer = setTimeout(() => {
       processEmbeds();
     }, 200);
 
-
     return () => clearTimeout(timer);
   }, [content, scriptStatus, processEmbeds]);
 
+  // 🔧 DEBUG: Log content on mount
+  useEffect(() => {
+    console.log('🎬 SocialEmbedRenderer mounted');
+    console.log('📄 Content preview:', content.substring(0, 200));
+    
+    return () => {
+      console.log('👋 SocialEmbedRenderer unmounting');
+    };
+  }, []);
 
   return (
     <>
@@ -518,7 +503,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
           max-width: 100%;
         }
 
-
         /* Loading states */
         .twitter-tweet-container:empty::after {
           content: "Loading tweet...";
@@ -527,7 +511,6 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
           padding: 3rem;
           color: #9ca3af;
         }
-
 
         /* Ensure embeds are centered and responsive */
         [data-social-embed] {
@@ -545,6 +528,5 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
     </>
   );
 };
-
 
 export default SocialEmbedRenderer;
