@@ -1,13 +1,13 @@
 // app/live/[streamId]/page.tsx
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { use } from "react";
 import Header from "@/app/components/Sidebar";
 import Footer from "@/app/components/Footer";
+import AirenaVideoPlayer from "@/app/components/CustomVideoPlayer";
 import { ArrowLeft, Wifi, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import Hls from "hls.js";
 
 interface StreamData {
   id: string;
@@ -35,8 +35,6 @@ export default function StreamViewerPage({
   const [stream, setStream] = useState<StreamData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
 
   const fetchStreamData = useCallback(async () => {
     try {
@@ -91,70 +89,6 @@ export default function StreamViewerPage({
   useEffect(() => {
     fetchStreamData();
   }, [fetchStreamData]);
-
-  useEffect(() => {
-    if (stream?.playbackUrl && videoRef.current) {
-      initializePlayer(stream.playbackUrl);
-    }
-
-    return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-      }
-    };
-  }, [stream]);
-
-  const initializePlayer = (playbackUrl: string) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90,
-      });
-
-      hls.loadSource(playbackUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch((err) => {
-          console.log("Autoplay prevented:", err);
-        });
-      });
-
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error("HLS Error:", data);
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log("Network error, trying to recover...");
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log("Media error, trying to recover...");
-              hls.recoverMediaError();
-              break;
-            default:
-              console.log("Fatal error, destroying player");
-              hls.destroy();
-              break;
-          }
-        }
-      });
-
-      hlsRef.current = hls;
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // For Safari native HLS support
-      video.src = playbackUrl;
-      video.addEventListener("loadedmetadata", () => {
-        video.play().catch((err) => {
-          console.log("Autoplay prevented:", err);
-        });
-      });
-    }
-  };
 
   if (loading) {
     return (
@@ -212,23 +146,21 @@ export default function StreamViewerPage({
             Back to Live Streams
           </Link>
 
-          {/* Video Player */}
-          <div className="bg-black rounded-2xl overflow-hidden shadow-2xl mb-6">
-            <div className="relative aspect-video">
-              <video
-                ref={videoRef}
-                className="w-full h-full"
-                controls
-                playsInline
-                autoPlay
-                muted
-              />
-              {/* Live Indicator */}
-              <div className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-full text-sm font-bold shadow-lg z-10">
+          {/* Video Player - Using Custom AirenaVideoPlayer */}
+          <div className="relative aspect-video rounded-2xl overflow-hidden shadow-2xl mb-6">
+            <AirenaVideoPlayer
+              videoUrl={stream.playbackUrl}
+              autoPlay={true}
+              muted={false}
+            />
+            
+            {/* Live Indicator Overlay - Positioned absolutely */}
+            {stream.isActive && (
+              <div className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-full text-sm font-bold shadow-lg z-20">
                 <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
                 LIVE
               </div>
-            </div>
+            )}
           </div>
 
           {/* Stream Info */}

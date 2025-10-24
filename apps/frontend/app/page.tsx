@@ -15,6 +15,7 @@ import FoundersClubSection from "./components/FoundersClubSection";
 import BigTournamentSection from "./components/BigTournamentSection";
 import Footer from "./components/Footer";
 import UserAvatar from "./components/UserAvatar";
+import DiwaliCupBanner from "./components/EventBanner";
 import { db } from "./firebase/config";
 
 interface Content {
@@ -240,6 +241,9 @@ export default function HomePage() {
         {/* === Main Content === */}
         <main className="w-full flex flex-col gap-12 lg:ml-20">
           <HeroSection />
+          
+          {/* === DIWALI CUP BANNER === */}
+          <DiwaliCupBanner />
           
           {/* Gaming Content Section */}
           <section className="px-6 sm:px-10 lg:px-16">
