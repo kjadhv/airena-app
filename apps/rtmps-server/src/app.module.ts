@@ -1,6 +1,6 @@
 // apps/rtmps-server/src/app.module.ts
 
-import { Module } from '@nestjs/common';
+import { Module, Logger } from '@nestjs/common'; // Import Logger
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
@@ -20,30 +20,56 @@ import { ReportsModule } from './reports/reports.module';
 @Module({
   imports: [
     // --- CORE CONFIGURATION ---
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env', // Make sure this .env file is in the SAME directory as your running application
+    }),
 
     // --- DATABASE CONFIGURATION (PostgreSQL) ---
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        url: configService.get<string>('DATABASE_URL'),
-        autoLoadEntities: true,
-        synchronize: true, // For development only. Use migrations in production.
-      }),
+      useFactory: (configService: ConfigService) => {
+        const dbUrl = configService.get<string>('DATABASE_URL');
+        
+        // --- DEBUGGING LINE ---
+        Logger.log(`[AppModule] Attempting to connect to Database with URL: ${dbUrl}`, 'Database');
+        
+        if (!dbUrl) {
+          Logger.error('[AppModule] FATAL: DATABASE_URL is not set!', 'Database');
+        }
+
+        return {
+          type: 'postgres',
+          url: dbUrl,
+          autoLoadEntities: true,
+          synchronize: true, // For development only. Use migrations in production.
+        };
+      },
     }),
 
     // --- BACKGROUND JOB QUEUE CONFIGURATION (BullMQ + Redis) ---
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: parseInt(configService.get('REDIS_PORT', '6379')),
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const redisHost = configService.get('REDIS_HOST');
+        const redisPort = parseInt(configService.get('REDIS_PORT', '6379'));
+        
+        // --- DEBUGGING LINES ---
+        Logger.log(`[AppModule] Attempting to connect to Redis at Host: ${redisHost}, Port: ${redisPort}`, 'Redis');
+
+        if (!redisHost) {
+          Logger.error('[AppModule] FATAL: REDIS_HOST is not set!', 'Redis');
+        }
+
+        return {
+          connection: {
+            host: redisHost,
+            port: redisPort,
+          },
+        };
+      },
     }),
 
     // --- FEATURE MODULES ---
