@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 
 declare global {
   interface Window {
@@ -22,455 +22,246 @@ interface SocialEmbedRendererProps {
   content: string;
 }
 
-interface ScriptStatus {
-  twitter: 'idle' | 'loading' | 'loaded' | 'error';
-  instagram: 'idle' | 'loading' | 'loaded' | 'error';
-}
+// Global script loading state
+const scriptLoadState = {
+  twitter: { loaded: false, loading: false, promise: null as Promise<void> | null },
+  instagram: { loaded: false, loading: false, promise: null as Promise<void> | null }
+};
 
 const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) => {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [scriptStatus, setScriptStatus] = useState<ScriptStatus>({
-    twitter: 'idle',
-    instagram: 'idle'
-  });
-  const processedIdsRef = useRef<Set<string>>(new Set());
-  const retryCountRef = useRef<Map<string, number>>(new Map());
-  const twitterLoadingPromiseRef = useRef<Promise<void> | null>(null);
-  const instagramLoadingPromiseRef = useRef<Promise<void> | null>(null);
-  const maxRetries = 3;
+  const processedRef = useRef(false);
 
-  // 🔧 FIX: Load Twitter script with proper Promise handling
-  const loadTwitterScript = useCallback(() => {
-    // If already loaded, return resolved promise
+  // Memoized embed detection
+  const embedTypes = useMemo(() => ({
+    hasYouTube: content.includes('data-type="youtube"'),
+    hasTwitter: content.includes('data-type="twitter"'),
+    hasInstagram: content.includes('data-type="instagram"')
+  }), [content]);
+
+  // Load Twitter script
+  const loadTwitterScript = useCallback((): Promise<void> => {
     if (window.twttr) {
-      console.log('✅ Twitter script already loaded');
-      setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
+      scriptLoadState.twitter.loaded = true;
       return Promise.resolve();
     }
+    if (scriptLoadState.twitter.promise) return scriptLoadState.twitter.promise;
 
-    // If already loading, return the existing promise
-    if (twitterLoadingPromiseRef.current) {
-      console.log('⏳ Twitter script already loading, waiting...');
-      return twitterLoadingPromiseRef.current;
-    }
-
-    // Create new loading promise
-    console.log('📥 Loading Twitter script...');
-    setScriptStatus(prev => ({ ...prev, twitter: 'loading' }));
-
-    const promise = new Promise<void>((resolve, reject) => {
+    scriptLoadState.twitter.loading = true;
+    scriptLoadState.twitter.promise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://platform.twitter.com/widgets.js';
       script.async = true;
       script.charset = 'utf-8';
       
       script.onload = () => {
-        console.log('✅ Twitter script loaded successfully');
-        setScriptStatus(prev => ({ ...prev, twitter: 'loaded' }));
-        twitterLoadingPromiseRef.current = null;
+        scriptLoadState.twitter.loaded = true;
+        scriptLoadState.twitter.loading = false;
+        console.log('✅ Twitter script loaded');
         resolve();
       };
       
-      script.onerror = (error) => {
-        console.error('❌ Failed to load Twitter script:', error);
-        setScriptStatus(prev => ({ ...prev, twitter: 'error' }));
-        twitterLoadingPromiseRef.current = null;
-        reject(error);
+      script.onerror = () => {
+        scriptLoadState.twitter.loading = false;
+        scriptLoadState.twitter.promise = null;
+        console.error('❌ Twitter script failed');
+        reject(new Error('Twitter script failed'));
       };
 
       document.body.appendChild(script);
     });
 
-    twitterLoadingPromiseRef.current = promise;
-    return promise;
+    return scriptLoadState.twitter.promise;
   }, []);
 
-  // 🔧 FIX: Load Instagram script with proper Promise handling
-  const loadInstagramScript = useCallback(() => {
-    // If already loaded, return resolved promise
+  // Load Instagram script
+  const loadInstagramScript = useCallback((): Promise<void> => {
     if (window.instgrm?.Embeds) {
-      console.log('✅ Instagram script already loaded');
-      setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
+      scriptLoadState.instagram.loaded = true;
       return Promise.resolve();
     }
+    if (scriptLoadState.instagram.promise) return scriptLoadState.instagram.promise;
 
-    // If already loading, return the existing promise
-    if (instagramLoadingPromiseRef.current) {
-      console.log('⏳ Instagram script already loading, waiting...');
-      return instagramLoadingPromiseRef.current;
-    }
-
-    console.log('📥 Loading Instagram script...');
-    setScriptStatus(prev => ({ ...prev, instagram: 'loading' }));
-
-    const promise = new Promise<void>((resolve, reject) => {
+    scriptLoadState.instagram.loading = true;
+    scriptLoadState.instagram.promise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://www.instagram.com/embed.js';
       script.async = true;
       
       script.onload = () => {
-        console.log('✅ Instagram script loaded successfully');
-        setScriptStatus(prev => ({ ...prev, instagram: 'loaded' }));
-        instagramLoadingPromiseRef.current = null;
-        
-        // Give Instagram a moment to initialize
-        setTimeout(() => {
-          if (window.instgrm?.Embeds?.process) {
-            try {
-              window.instgrm.Embeds.process();
-            } catch (e) {
-              console.error('Error processing Instagram embeds:', e);
-            }
-          }
-          resolve();
-        }, 100);
+        scriptLoadState.instagram.loaded = true;
+        scriptLoadState.instagram.loading = false;
+        console.log('✅ Instagram script loaded');
+        resolve();
       };
       
-      script.onerror = (error) => {
-        console.error('❌ Failed to load Instagram script:', error);
-        setScriptStatus(prev => ({ ...prev, instagram: 'error' }));
-        instagramLoadingPromiseRef.current = null;
-        reject(error);
+      script.onerror = () => {
+        scriptLoadState.instagram.loading = false;
+        scriptLoadState.instagram.promise = null;
+        console.error('❌ Instagram script failed');
+        reject(new Error('Instagram script failed'));
       };
 
       document.body.appendChild(script);
     });
 
-    instagramLoadingPromiseRef.current = promise;
-    return promise;
+    return scriptLoadState.instagram.promise;
   }, []);
 
-  // Extract YouTube ID from URL
-  const extractYouTubeId = useCallback((url: string): string | null => {
-    if (!url || typeof url !== 'string') return null;
+  // Embed processors
+  const processYouTubeEmbed = useCallback((element: HTMLElement, id: string) => {
+    console.log('🎥 Processing YouTube:', id);
+    element.innerHTML = `<div class="youtube-embed-wrapper my-12"><div class="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black"><iframe src="https://www.youtube.com/embed/${id}?modestbranding=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full" loading="lazy" title="YouTube video"></iframe></div></div>`;
+  }, []);
 
-    try {
-      const patterns = [
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-        /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
-      ];
-      
-      for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match && match[1]) return match[1];
-      }
-      return null;
-    } catch (error) {
-      console.error('Error extracting YouTube ID:', error);
-      return null;
+  const processTwitterEmbed = useCallback(async (element: HTMLElement, src: string, id: string) => {
+    console.log('🐦 Processing Twitter:', id);
+    element.innerHTML = `<div class="twitter-embed-wrapper flex justify-center my-12"><blockquote class="twitter-tweet" data-theme="dark" data-conversation="none" data-dnt="true"><a href="${src}"></a></blockquote></div>`;
+    
+    if (window.twttr?.widgets?.load) {
+      window.twttr.widgets.load(element);
     }
   }, []);
 
-  // Extract Tweet ID from URL
-  const extractTweetId = useCallback((url: string): string | null => {
-    if (!url || typeof url !== 'string') return null;
-
-    try {
-      const match = url.match(/status(?:es)?\/(\d+)/);
-      return match ? match[1] : null;
-    } catch (error) {
-      console.error('Error extracting Tweet ID:', error);
-      return null;
-    }
-  }, []);
-
-  // Process YouTube embed
-  const processYouTubeEmbed = useCallback((element: HTMLElement, src: string, id: string) => {
-    try {
-      const youtubeId = id || extractYouTubeId(src);
-      if (!youtubeId) {
-        throw new Error('Invalid YouTube ID');
-      }
-
-      const embedHtml = `
-        <div class="youtube-embed-wrapper my-12">
-          <div class="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black">
-            <iframe 
-              src="https://www.youtube.com/embed/${youtubeId}?modestbranding=1&rel=0&controls=1" 
-              frameborder="0" 
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowfullscreen
-              class="w-full h-full"
-              loading="lazy"
-              title="YouTube video player"
-            ></iframe>
-          </div>
-        </div>`;
-
-      element.innerHTML = embedHtml;
-      element.dataset.processed = 'true';
-      console.log('✅ YouTube embed processed:', youtubeId);
-      return true;
-    } catch (error) {
-      console.error('❌ YouTube embed error:', error);
-      return false;
-    }
-  }, [extractYouTubeId]);
-
-  // Process Twitter embed
-  const processTwitterEmbed = useCallback(async (element: HTMLElement, src: string, id: string): Promise<boolean> => {
-    try {
-      const tweetId = id || extractTweetId(src);
-      if (!tweetId) {
-        throw new Error('Invalid Tweet ID');
-      }
-
-      // Create container
-      element.innerHTML = '<div class="twitter-tweet-container flex justify-center my-12"></div>';
-      const container = element.querySelector('.twitter-tweet-container') as HTMLElement;
-
-      if (!container) {
-        throw new Error('Failed to create Twitter container');
-      }
-
-      // Method 1: Try createTweet API (most reliable)
-      if (window.twttr?.widgets?.createTweet) {
-        try {
-          const tweet = await window.twttr.widgets.createTweet(tweetId, container, {
-            theme: 'dark',
-            conversation: 'none',
-            cards: 'visible',
-            width: 550,
-            dnt: true
-          });
-
-          if (tweet) {
-            element.dataset.processed = 'true';
-            console.log('✅ Twitter embed processed (createTweet):', tweetId);
-            return true;
-          }
-        } catch (createError) {
-          console.warn('createTweet failed, trying fallback:', createError);
-        }
-      }
-
-      // Method 2: Fallback to blockquote
-      element.innerHTML = `
-        <div class="twitter-embed-wrapper flex justify-center my-12">
-          <blockquote class="twitter-tweet" data-theme="dark" data-conversation="none" data-dnt="true">
-            <a href="${src}"></a>
-          </blockquote>
-        </div>`;
-
-      if (window.twttr?.widgets?.load) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        window.twttr.widgets.load(element);
-        element.dataset.processed = 'true';
-        console.log('✅ Twitter embed processed (blockquote):', tweetId);
-        return true;
-      }
-
-      throw new Error('Twitter widgets not available');
-
-    } catch (error) {
-      console.error('❌ Twitter embed error:', error);
-      return false;
-    }
-  }, [extractTweetId]);
-
-  // Process Instagram embed
   const processInstagramEmbed = useCallback((element: HTMLElement, src: string, id: string) => {
-    try {
-      const embedHtml = `
-        <div class="instagram-embed-wrapper flex justify-center my-12">
-          <blockquote class="instagram-media" 
-            data-instgrm-captioned 
-            data-instgrm-permalink="${src}" 
-            data-instgrm-version="14"
-            style="background:#000; border:1px solid #262626; border-radius:16px; margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
-            <a href="${src}" target="_blank" rel="noopener noreferrer">View on Instagram</a>
-          </blockquote>
-        </div>`;
-
-      element.innerHTML = embedHtml;
-
-      // Process Instagram embeds
-      if (window.instgrm?.Embeds?.process) {
-        setTimeout(() => {
-          try {
-            window.instgrm?.Embeds?.process();
-          } catch (e) {
-            console.error('Instagram process error:', e);
-          }
-        }, 100);
-      }
-
-      element.dataset.processed = 'true';
-      console.log('✅ Instagram embed processed:', id);
-      return true;
-    } catch (error) {
-      console.error('❌ Instagram embed error:', error);
-      return false;
-    }
+    console.log('📸 Processing Instagram:', id);
+    element.innerHTML = `<div class="instagram-embed-wrapper flex justify-center my-12"><blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${src}" data-instgrm-version="14" style="background:#000; border:1px solid #262626; border-radius:16px; margin:1px; max-width:540px; min-width:326px; padding:0; width:99.375%;"><a href="${src}" target="_blank" rel="noopener noreferrer">View on Instagram</a></blockquote></div>`;
   }, []);
 
-  // Show fallback UI
   const showFallback = useCallback((element: HTMLElement, src: string, type: string) => {
-    const platformEmoji = {
-      youtube: '🎥',
-      twitter: '🐦',
-      instagram: '📸'
-    }[type] || '🔗';
-
-    const platformName = {
-      youtube: 'YouTube',
-      twitter: 'Twitter/X',
-      instagram: 'Instagram'
-    }[type] || 'Social Media';
-
-    element.innerHTML = `
-      <div class="embed-fallback my-8 p-6 bg-gray-800/50 rounded-xl border border-gray-700 text-center max-w-2xl mx-auto">
-        <p class="text-gray-300 mb-3 text-lg">${platformEmoji} ${platformName} Post</p>
-        <a href="${src}" target="_blank" rel="noopener noreferrer" 
-           class="text-emerald-400 hover:text-emerald-300 underline break-all inline-block">
-          View original content →
-        </a>
-      </div>`;
-    element.dataset.processed = 'true';
+    const emoji = { youtube: '🎥', twitter: '🐦', instagram: '📸' }[type] || '🔗';
+    const name = { youtube: 'YouTube', twitter: 'Twitter/X', instagram: 'Instagram' }[type] || 'Social Media';
+    
+    element.innerHTML = `<div class="embed-fallback my-8 p-6 bg-gray-800/50 rounded-xl border border-gray-700 text-center max-w-2xl mx-auto"><p class="text-gray-300 mb-3 text-lg">${emoji} ${name} Post</p><a href="${src}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:text-emerald-300 underline break-all">View original →</a></div>`;
   }, []);
 
-  // Main processing function
-  const processEmbeds = useCallback(async () => {
-    if (!contentRef.current) {
-      console.log('❌ No contentRef available');
+  // Process all embeds
+  const processAllEmbeds = useCallback(async () => {
+    if (!contentRef.current || processedRef.current) {
+      console.log('⏭️ Skipping embed processing');
       return;
     }
 
     const embedElements = contentRef.current.querySelectorAll('[data-social-embed="true"]');
     if (embedElements.length === 0) {
-      console.log('ℹ️ No embeds to process');
+      console.log('ℹ️ No embeds found');
       return;
     }
 
-    console.log(`🔍 Found ${embedElements.length} embeds to process`);
+    console.log(`🔍 Processing ${embedElements.length} embeds`);
+    processedRef.current = true;
 
+    // Process all embeds
     for (const element of Array.from(embedElements)) {
       const el = element as HTMLElement;
-      
-      // Skip if already processed
-      if (el.dataset.processed === 'true') {
-        continue;
-      }
-
       const src = el.getAttribute('data-src');
       const type = el.getAttribute('data-type');
       const id = el.getAttribute('data-id') || '';
 
-      console.log(`🔄 Processing ${type} embed:`, { src, id });
+      console.log(`📝 Found ${type} embed:`, { src, id });
 
       if (!src || !type) {
-        console.warn('⚠️ Missing src or type:', el);
-        continue;
-      }
-
-      // Check retry count
-      const embedKey = `${type}-${id}`;
-      const retryCount = retryCountRef.current.get(embedKey) || 0;
-
-      if (retryCount >= maxRetries) {
-        console.warn(`⚠️ Max retries reached for ${embedKey}`);
-        showFallback(el, src, type);
+        console.warn('⚠️ Missing src or type');
         continue;
       }
 
       try {
-        let success = false;
-
         switch (type) {
           case 'youtube':
-            success = processYouTubeEmbed(el, src, id);
+            processYouTubeEmbed(el, id);
             break;
 
           case 'twitter':
-            if (scriptStatus.twitter === 'loaded') {
-              success = await processTwitterEmbed(el, src, id);
-            } else if (scriptStatus.twitter === 'error') {
-              showFallback(el, src, type);
-              success = true;
+            if (scriptLoadState.twitter.loaded || window.twttr) {
+              await processTwitterEmbed(el, src, id);
             } else {
-              console.log('⏳ Waiting for Twitter script...');
+              console.log('⏳ Twitter script not ready, showing fallback');
+              showFallback(el, src, type);
             }
             break;
 
           case 'instagram':
-            if (scriptStatus.instagram === 'loaded') {
-              success = processInstagramEmbed(el, src, id);
-            } else if (scriptStatus.instagram === 'error') {
-              showFallback(el, src, type);
-              success = true;
+            if (scriptLoadState.instagram.loaded || window.instgrm?.Embeds) {
+              processInstagramEmbed(el, src, id);
             } else {
-              console.log('⏳ Waiting for Instagram script...');
+              console.log('⏳ Instagram script not ready, showing fallback');
+              showFallback(el, src, type);
             }
             break;
 
           default:
             console.warn('⚠️ Unknown embed type:', type);
             showFallback(el, src, type);
-            success = true;
         }
-
-        if (!success) {
-          retryCountRef.current.set(embedKey, retryCount + 1);
-          if (retryCount + 1 >= maxRetries) {
-            showFallback(el, src, type);
-          }
-        } else {
-          processedIdsRef.current.add(embedKey);
-        }
-
       } catch (error) {
-        console.error(`❌ Error processing ${type} embed:`, error);
-        retryCountRef.current.set(embedKey, retryCount + 1);
-        if (retryCount + 1 >= maxRetries) {
-          showFallback(el, src, type);
-        }
+        console.error(`❌ Error processing ${type}:`, error);
+        showFallback(el, src, type);
       }
     }
-  }, [scriptStatus, processYouTubeEmbed, processTwitterEmbed, processInstagramEmbed, showFallback]);
 
-  // 🔧 FIX: Better script loading logic
-  useEffect(() => {
-    if (!content) return;
-
-    const hasTwitter = content.includes('data-type="twitter"');
-    const hasInstagram = content.includes('data-type="instagram"');
-
-    console.log('📊 Embed detection:', { hasTwitter, hasInstagram });
-
-    if (hasTwitter && scriptStatus.twitter === 'idle') {
-      console.log('🚀 Initiating Twitter script load');
-      loadTwitterScript().catch(err => {
-        console.error('Failed to load Twitter script:', err);
-      });
+    // Trigger Instagram processing after all embeds are ready
+    if ((scriptLoadState.instagram.loaded || window.instgrm?.Embeds) && window.instgrm?.Embeds?.process) {
+      setTimeout(() => {
+        try {
+          console.log('🔄 Processing Instagram embeds');
+          window.instgrm?.Embeds?.process();
+        } catch (e) {
+          console.error('Instagram process error:', e);
+        }
+      }, 100);
     }
 
-    if (hasInstagram && scriptStatus.instagram === 'idle') {
-      console.log('🚀 Initiating Instagram script load');
-      loadInstagramScript().catch(err => {
-        console.error('Failed to load Instagram script:', err);
-      });
-    }
-  }, [content, scriptStatus.twitter, scriptStatus.instagram, loadTwitterScript, loadInstagramScript]);
+    console.log('✅ All embeds processed');
+  }, [processYouTubeEmbed, processTwitterEmbed, processInstagramEmbed, showFallback]);
 
-  // Process embeds when content or scripts change
+  // Load scripts and process embeds
   useEffect(() => {
-    console.log('🔄 Processing embeds with status:', scriptStatus);
+    console.log('🎬 SocialEmbedRenderer effect triggered');
+    console.log('📊 Embed types:', embedTypes);
+    
+    // Reset processed flag when content changes
+    processedRef.current = false;
+
+    const init = async () => {
+      try {
+        // Load required scripts
+        const loadPromises: Promise<void>[] = [];
+        
+        if (embedTypes.hasTwitter) {
+          console.log('🚀 Loading Twitter script');
+          loadPromises.push(loadTwitterScript().catch(err => {
+            console.error('Twitter load error:', err);
+          }));
+        }
+        
+        if (embedTypes.hasInstagram) {
+          console.log('🚀 Loading Instagram script');
+          loadPromises.push(loadInstagramScript().catch(err => {
+            console.error('Instagram load error:', err);
+          }));
+        }
+
+        // Wait for scripts to load
+        if (loadPromises.length > 0) {
+          await Promise.allSettled(loadPromises);
+          // Give scripts time to initialize
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        // Process embeds
+        processAllEmbeds();
+      } catch (error) {
+        console.error('❌ Embed initialization error:', error);
+      }
+    };
+
+    // Small delay to ensure DOM is ready
     const timer = setTimeout(() => {
-      processEmbeds();
-    }, 200);
+      init();
+    }, 100);
 
     return () => clearTimeout(timer);
-  }, [content, scriptStatus, processEmbeds]);
-
-  // 🔧 DEBUG: Log content on mount
-  useEffect(() => {
-    console.log('🎬 SocialEmbedRenderer mounted');
-    console.log('📄 Content preview:', content.substring(0, 200));
-    
-    return () => {
-      console.log('👋 SocialEmbedRenderer unmounting');
-    };
-  }, []);
+  }, [content, embedTypes, loadTwitterScript, loadInstagramScript, processAllEmbeds]);
 
   return (
     <>
@@ -489,34 +280,16 @@ const SocialEmbedRenderer: React.FC<SocialEmbedRendererProps> = ({ content }) =>
           margin: 0 auto !important;
         }
         
-        .twitter-tweet,
-        .twitter-tweet-container,
-        .twitter-tweet-container > * {
-          margin-left: auto !important;
-          margin-right: auto !important;
+        .twitter-tweet {
+          margin: 0 auto !important;
           max-width: 550px !important;
         }
         
-        .embed-fallback a {
-          word-break: break-word;
-          display: inline-block;
-          max-width: 100%;
-        }
-
-        /* Loading states */
-        .twitter-tweet-container:empty::after {
-          content: "Loading tweet...";
-          display: block;
-          text-align: center;
-          padding: 3rem;
-          color: #9ca3af;
-        }
-
-        /* Ensure embeds are centered and responsive */
         [data-social-embed] {
           width: 100%;
           display: flex;
           justify-content: center;
+          min-height: 50px;
         }
       `}</style>
       
