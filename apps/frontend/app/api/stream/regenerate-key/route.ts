@@ -1,41 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuth } from "firebase-admin/auth";
 
-/**
- * Handles POST requests to regenerate a user's stream key by proxying to the backend.
- */
 export async function POST(request: NextRequest) {
-  // 1. Get Authorization header
-  const authorization = request.headers.get('Authorization');
-  if (!authorization) {
-    return NextResponse.json({ message: 'Authorization header is required' }, { status: 401 });
-  }
-
-  // 2. Get backend URL from environment variables
-  const backendApiUrl = process.env.NESTJS_BACKEND_URL;
-  if (!backendApiUrl) {
-    console.error("NESTJS_BACKEND_URL is not set in the environment variables.");
-    return NextResponse.json({ message: 'Server configuration error' }, { status: 500 });
-  }
-
   try {
-    // 3. Forward the request to the NestJS backend
-    const backendResponse = await fetch(`${backendApiUrl}/stream/regenerate-key`, {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decodedToken = await getAuth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    console.log('🔄 Regenerating stream key for:', userId);
+
+    const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    if (!backendUrl) {
+      console.error("❌ Backend URL not configured");
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
+    const response = await fetch(`${backendUrl}/stream/regenerate-key`, {
       method: 'POST',
       headers: {
-        'Authorization': authorization,
         'Content-Type': 'application/json',
+        'Authorization': authHeader,
       },
-      // MODIFIED: Added the request body to be forwarded to the backend
-      body: JSON.stringify(await request.json()),
-      cache: 'no-store',
+      body: JSON.stringify({ userId }),
     });
 
-    // 4. Return the backend's response to the client
-    const responseData = await backendResponse.json();
-    return NextResponse.json(responseData, { status: backendResponse.status });
+    console.log('📥 Backend response:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Backend error:', errorText);
+      return NextResponse.json(
+        { error: 'Failed to regenerate stream key', details: errorText },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    
+    const hlsBaseUrl = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    if (!hlsBaseUrl) {
+      console.error("❌ HLS_BASE_URL is not set!");
+      return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
+    }
+    
+    const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
+
+    console.log('✅ Stream key regenerated');
+
+    return NextResponse.json({
+      ...data,
+      playbackUrl,
+    });
 
   } catch (error) {
-    console.error('Proxy API route error:', error);
-    return NextResponse.json({ message: 'An internal server error occurred.' }, { status: 500 });
+    console.error('❌ API regenerate key error:', error);
+    
+    if (typeof error === 'object' && error !== null && 'code' in error && (error as {code: unknown}).code === 'auth/id-token-expired') {
+      return NextResponse.json({ error: 'Token expired' }, { status: 401 });
+    }
+    
+    return NextResponse.json(
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, InternalServerErrorException } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Stream } from "./stream.entity";
@@ -6,11 +6,9 @@ import { User } from "./user.entity";
 import { randomBytes } from "crypto";
 import { ConfigService } from "@nestjs/config";
 import { Express } from 'express';
-import * as admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 import * as path from 'path';
 import { VideoService } from '../video/video.service';
-import { VodProcessorService } from "../vod-processor/vod-processor.service";
 
 export interface StreamCredentials {
   streamKey: string;
@@ -47,10 +45,10 @@ export class StreamService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private configService: ConfigService,
-    private videoService: VideoService, // Inject VideoService
+    private videoService: VideoService,
   ) {
     this.RTMP_SERVER_URL = this.configService.get<string>("RTMP_SERVER_URL", "rtmp://localhost:1935/live");
-    this.HLS_BASE_URL = this.configService.get<string>("HLS_BASE_URL", "http://localhost:8000/live");
+    this.HLS_BASE_URL = this.configService.get<string>("HLS_BASE_URL", "http://localhost:8000");
     
     const bucketName = this.configService.get<string>("FIREBASE_STORAGE_BUCKET");
     if (!bucketName) {
@@ -63,7 +61,9 @@ export class StreamService {
 
   async getActiveStreams(): Promise<LiveStreamDto[]> {
     const streams = await this.streamRepository.find({
-      where: { isActive: true }, relations: ["user"], order: { lastActiveAt: 'DESC' }
+      where: { isActive: true }, 
+      relations: ["user"], 
+      order: { lastActiveAt: 'DESC' }
     });
 
     return streams.map((stream) => ({
@@ -76,18 +76,24 @@ export class StreamService {
   }
   
   async getStreamCredentials(detailsDto: StreamDetailsDto, thumbnailFile: Express.Multer.File): Promise<StreamCredentials> {
+    this.logger.log(`Getting stream credentials for user: ${detailsDto.email}`);
+    
     const user = await this.findOrCreateUser(detailsDto);
     let stream = await this.streamRepository.findOne({ where: { userId: user.id } });
+    
     if (!stream) {
+      this.logger.log(`Creating new stream for user: ${user.email}`);
       stream = await this.createStreamForUser(user);
+    } else {
+      this.logger.log(`Found existing stream: ${stream.streamKey}`);
     }
     
     let thumbnailUrl = '';
     try {
       thumbnailUrl = await this.saveThumbnailAndGetUrl(thumbnailFile, stream.streamKey);
-      this.logger.log(`Thumbnail uploaded successfully: ${thumbnailUrl}`);
+      this.logger.log(`✅ Thumbnail uploaded: ${thumbnailUrl}`);
     } catch (error: any) {
-      this.logger.error(`Thumbnail upload failed, using placeholder`, error.message);
+      this.logger.error(`Thumbnail upload failed, using placeholder: ${error.message}`);
       thumbnailUrl = `https://placehold.co/1600x900/000000/FFFFFF?text=${encodeURIComponent(detailsDto.title || 'Stream')}`;
     }
 
@@ -96,10 +102,12 @@ export class StreamService {
     stream.thumbnailUrl = thumbnailUrl;
     await this.streamRepository.save(stream);
 
+    this.logger.log(`✅ Stream credentials ready for: ${stream.streamKey}`);
+
     return {
       streamKey: stream.streamKey,
       streamUrl: `${this.RTMP_SERVER_URL}`,
-      playbackUrl: `${this.HLS_BASE_URL}/${stream.streamKey}/index.m3u8`,
+      playbackUrl: `${this.HLS_BASE_URL}/live/${stream.streamKey}/index.m3u8`,
     };
   }
 
@@ -109,27 +117,20 @@ export class StreamService {
       return '';
     }
 
-    this.logger.log(`Starting thumbnail upload for stream ${streamKey}`);
-    this.logger.log(`File size: ${file.size} bytes, mimetype: ${file.mimetype}`);
-    this.logger.log(`Target bucket: ${this.storageBucketName}`);
+    this.logger.log(`Uploading thumbnail for stream ${streamKey}`);
+    this.logger.log(`File: ${file.size} bytes, ${file.mimetype}`);
     
     try {
       const bucket = getStorage().bucket();
       
-      this.logger.log(`Bucket obtained, checking if it exists...`);
-      
       const [exists] = await bucket.exists();
       if (!exists) {
-        throw new Error(`Storage bucket does not exist or is not accessible. Check your FIREBASE_STORAGE_BUCKET environment variable.`);
+        throw new Error(`Storage bucket does not exist. Check FIREBASE_STORAGE_BUCKET.`);
       }
-      
-      this.logger.log(`Bucket exists and is accessible`);
       
       const fileExtension = path.extname(file.originalname) || '.jpg';
       const fileName = `thumbnails/${streamKey}${fileExtension}`;
       const fileUpload = bucket.file(fileName);
-
-      this.logger.log(`Uploading to: ${fileName}`);
 
       await fileUpload.save(file.buffer, {
         metadata: {
@@ -139,25 +140,14 @@ export class StreamService {
         validation: false,
       });
 
-      this.logger.log(`File uploaded, making it public...`);
-
       await fileUpload.makePublic();
 
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-      this.logger.log(`Thumbnail uploaded successfully: ${publicUrl}`);
       
       return publicUrl;
 
     } catch (error: any) {
-      this.logger.error(`Failed to upload thumbnail for stream ${streamKey}`);
-      this.logger.error(`Error message: ${error.message}`);
-      this.logger.error(`Error code: ${error.code}`);
-      
-      if (error.message?.includes('does not exist')) {
-        this.logger.error(`BUCKET NOT FOUND! Current bucket name: ${this.storageBucketName}`);
-        this.logger.error(`Please verify this bucket name exists in Firebase Console -> Storage`);
-      }
-      
+      this.logger.error(`Thumbnail upload failed: ${error.message}`);
       throw error;
     }
   }
@@ -171,14 +161,15 @@ export class StreamService {
       return null;
     }
     
-    this.logger.log(`Found user: ${user.id}, email: ${user.email}, looking for stream...`);
+    this.logger.log(`Found user: ${user.email}`);
     
     const stream = await this.streamRepository.findOne({ 
-      where: { userId: user.id }, relations: ['user']
+      where: { userId: user.id }, 
+      relations: ['user']
     });
     
     if (!stream) {
-      this.logger.warn(`No stream found for userId: ${user.id}`);
+      this.logger.warn(`No stream found for user: ${user.email}`);
       return null;
     }
 
@@ -188,25 +179,36 @@ export class StreamService {
       ...stream,
       streamKey: stream.streamKey,
       streamUrl: `${this.RTMP_SERVER_URL}`,
-      playbackUrl: `${this.HLS_BASE_URL}/${stream.streamKey}/index.m3u8`,
+      playbackUrl: `${this.HLS_BASE_URL}/live/${stream.streamKey}/index.m3u8`,
     };
   }
 
   async regenerateStreamKey(firebaseUid: string): Promise<StreamCredentials> {
+    this.logger.log(`Regenerating stream key for firebaseUid: ${firebaseUid}`);
+    
     const user = await this.userRepository.findOne({ where: { firebaseUid } });
-    if (!user) throw new NotFoundException("User not found.");
+    if (!user) {
+      this.logger.error(`User not found: ${firebaseUid}`);
+      throw new NotFoundException("User not found.");
+    }
     
     const stream = await this.streamRepository.findOne({ where: { userId: user.id } });
-    if (!stream) throw new NotFoundException("Stream not found for the user.");
+    if (!stream) {
+      this.logger.error(`Stream not found for user: ${user.email}`);
+      throw new NotFoundException("Stream not found for the user.");
+    }
 
+    const oldKey = stream.streamKey;
     stream.streamKey = this.generateStreamKey();
     stream.isActive = false;
     await this.streamRepository.save(stream);
 
+    this.logger.log(`✅ Stream key regenerated: ${oldKey} → ${stream.streamKey}`);
+
     return {
       streamKey: stream.streamKey,
       streamUrl: `${this.RTMP_SERVER_URL}`,
-      playbackUrl: `${this.HLS_BASE_URL}/${stream.streamKey}/index.m3u8`,
+      playbackUrl: `${this.HLS_BASE_URL}/live/${stream.streamKey}/index.m3u8`,
     };
   }
   
@@ -230,27 +232,19 @@ export class StreamService {
     
     if (isActive) {
       stream.lastActiveAt = new Date();
-      this.logger.log(`Stream ${streamKey} went LIVE`);
+      this.logger.log(`🔴 Stream ${streamKey} went LIVE`);
     } else if (wasActive && !isActive) {
-      // Stream just ended - create VOD
-      this.logger.log(`Stream ${streamKey} ended - creating VOD`);
+      this.logger.log(`⚫ Stream ${streamKey} ended - creating VOD`);
       await this.createVODFromStream(stream);
     }
     
     await this.streamRepository.save(stream);
   }
 
-  /**
-   * Creates a VOD entry when a stream ends
-   * This assumes your media server has already saved HLS files in the appropriate directory
-   */
   private async createVODFromStream(stream: Stream): Promise<void> {
     try {
-      // The HLS URL for the VOD will be the same as the live stream URL
-      // but your media server should keep the files available after the stream ends
-      const vodHlsUrl = `${this.HLS_BASE_URL}/${stream.streamKey}/index.m3u8`;
+      const vodHlsUrl = `${this.HLS_BASE_URL}/live/${stream.streamKey}/index.m3u8`;
       
-      // Create the VOD record
       const video = await this.videoService.createWithUploader(
         {
           title: stream.title || `${stream.user?.displayName}'s Stream`,
@@ -261,26 +255,38 @@ export class StreamService {
         stream.userId
       );
       
-      this.logger.log(`VOD created successfully for stream ${stream.streamKey} with video ID ${video.id}`);
-      
-      // Optionally: trigger background processing here
-      // await this.queueVideoProcessing(video.id);
+      this.logger.log(`✅ VOD created for stream ${stream.streamKey} (video ID: ${video.id})`);
       
     } catch (error: any) {
-      this.logger.error(`Failed to create VOD for stream ${stream.streamKey}`, error.message);
-      // Don't throw - we don't want to fail the stream status update if VOD creation fails
+      this.logger.error(`Failed to create VOD for stream ${stream.streamKey}: ${error.message}`);
     }
   }
 
   private async findOrCreateUser(userDto: { userId: string, email: string, displayName: string }): Promise<User> {
     let user = await this.userRepository.findOne({ where: { firebaseUid: userDto.userId } });
-    if (user) return user;
+    
+    if (user) {
+      this.logger.log(`Found existing user: ${user.email}`);
+      
+      // Update user info if it changed
+      if (user.email !== userDto.email || user.displayName !== userDto.displayName) {
+        user.email = userDto.email;
+        user.displayName = userDto.displayName;
+        await this.userRepository.save(user);
+        this.logger.log(`Updated user info for: ${user.email}`);
+      }
+      
+      return user;
+    }
 
+    this.logger.log(`Creating new user: ${userDto.email}`);
+    
     const newUser = this.userRepository.create({
       firebaseUid: userDto.userId,
       email: userDto.email,
       displayName: userDto.displayName || "New User",
     });
+    
     return this.userRepository.save(newUser);
   }
 

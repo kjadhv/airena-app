@@ -44,13 +44,16 @@ export class StreamController {
   async getExistingCredentials(@Query('userId') userId: string) {
     if (!userId) throw new BadRequestException("userId query parameter is required");
     
-    // FIXED: Handle the null case properly instead of returning null directly
+    this.logger.log(`Getting existing credentials for userId: ${userId}`);
+    
     const credentials = await this.streamService.getExistingCredentials(userId);
     
     if (!credentials) {
+      this.logger.log(`No existing credentials found for userId: ${userId}`);
       return { exists: false };
     }
     
+    this.logger.log(`Found existing credentials for userId: ${userId}`);
     return credentials;
   }
 
@@ -61,8 +64,12 @@ export class StreamController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<StreamCredentials> {
     if (!detailsDto.userId) throw new BadRequestException("userId is required");
+    if (!detailsDto.email) throw new BadRequestException("email is required");
+    if (!detailsDto.displayName) throw new BadRequestException("displayName is required");
     if (!file) throw new BadRequestException("thumbnail file is required");
 
+    this.logger.log(`Creating stream credentials for user: ${detailsDto.email}`);
+    
     return this.streamService.getStreamCredentials(detailsDto, file);
   }
   
@@ -71,12 +78,18 @@ export class StreamController {
   async updateStreamStatusFromHook(@Body() hookDto: StreamStatusHookDto): Promise<void> {
     const { streamKey, isActive } = hookDto;
     if (!streamKey) throw new BadRequestException("streamKey is required");
+    
+    this.logger.log(`Webhook: Stream ${streamKey} status update: ${isActive ? 'LIVE' : 'OFFLINE'}`);
+    
     await this.streamService.updateStreamStatus(streamKey, isActive);
   }
 
   @Post("regenerate-key")
   async regenerateStreamKey(@Body("userId") userId: string): Promise<StreamCredentials> {
     if (!userId) throw new BadRequestException("userId is required");
+    
+    this.logger.log(`Regenerating stream key for userId: ${userId}`);
+    
     return this.streamService.regenerateStreamKey(userId);
   }
 

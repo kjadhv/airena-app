@@ -8,7 +8,7 @@ if (!getApps().length) {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
     if (!serviceAccountKey) {
-      console.error("FIREBASE_SERVICE_ACCOUNT_KEY is not set!");
+      console.error("❌ FIREBASE_SERVICE_ACCOUNT_KEY is not set!");
       throw new Error("Firebase service account key is missing");
     }
     
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     
     const urlWithQuery = `${backendUrl}/stream/credentials?userId=${encodeURIComponent(userId)}`;
     
-    console.log('📡 Calling backend GET:', urlWithQuery);
+    console.log('📡 Fetching existing credentials for:', userId);
     
     const response = await fetch(urlWithQuery, {
       method: 'GET',
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (response.status === 404) {
-      console.log('ℹ️ No stream found for user (404)');
+      console.log('ℹ️ No stream found (404)');
       return NextResponse.json({ exists: false }, { status: 200 });
     }
 
@@ -114,12 +114,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify token and get user info from Firebase
     const token = authHeader.split(' ')[1];
     const decodedToken = await getAuth().verifyIdToken(token);
     const userId = decodedToken.uid;
     
-    console.log('🔍 Decoded token for user:', userId);
+    console.log('🔍 Creating credentials for user:', userId);
     
     // Get user details from Firebase Auth
     const userRecord = await getAuth().getUser(userId);
@@ -139,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
-    console.log('🔍 Backend URL for POST:', backendUrl);
+    console.log('🔍 Backend URL:', backendUrl);
     
     if (!backendUrl) {
       console.error("❌ Backend URL not configured");
@@ -148,7 +147,7 @@ export async function POST(request: NextRequest) {
     
     const backendEndpoint = `${backendUrl}/stream/credentials`;
     
-    console.log('📡 Calling backend POST:', backendEndpoint);
+    console.log('📡 Sending to backend:', backendEndpoint);
     
     const response = await fetch(backendEndpoint, {
       method: 'POST',
@@ -158,13 +157,13 @@ export async function POST(request: NextRequest) {
       body: formData,
     });
 
-    console.log('📥 Backend POST response status:', response.status);
+    console.log('📥 Backend response:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Backend POST error:', errorText);
+      console.error('❌ Backend error:', errorText);
       return NextResponse.json(
-        { error: 'Failed to fetch credentials from backend', details: errorText },
+        { error: 'Failed to create credentials', details: errorText },
         { status: response.status }
       );
     }
@@ -180,7 +179,7 @@ export async function POST(request: NextRequest) {
     
     const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
 
-    console.log('✅ Stream credentials generated successfully');
+    console.log('✅ Credentials created successfully');
 
     return NextResponse.json({
       ...data,
@@ -191,7 +190,7 @@ export async function POST(request: NextRequest) {
     console.error('❌ API proxy POST error:', error);
     return NextResponse.json(
       { 
-        error: 'Internal server error in API proxy',
+        error: 'Internal server error',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
