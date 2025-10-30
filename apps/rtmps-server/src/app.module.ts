@@ -55,9 +55,16 @@ import { ReportsModule } from './reports/reports.module';
       useFactory: (configService: ConfigService) => {
         const redisHost = configService.get('REDIS_HOST');
         const redisPort = parseInt(configService.get('REDIS_PORT', '6379'));
+        const redisPassword = configService.get('REDIS_PASSWORD'); // ← ADDED
         
         // --- DEBUGGING LINES ---
         Logger.log(`[AppModule] Attempting to connect to Redis at Host: ${redisHost}, Port: ${redisPort}`, 'Redis');
+        
+        if (redisPassword) {
+          Logger.log(`[AppModule] Redis password is configured`, 'Redis');
+        } else {
+          Logger.warn(`[AppModule] Redis password is NOT configured - using passwordless connection`, 'Redis');
+        }
 
         if (!redisHost) {
           Logger.error('[AppModule] FATAL: REDIS_HOST is not set!', 'Redis');
@@ -67,6 +74,7 @@ import { ReportsModule } from './reports/reports.module';
           connection: {
             host: redisHost,
             port: redisPort,
+            password: redisPassword, // ← ADDED - will be undefined if not set, which is fine
           },
         };
       },
