@@ -15,7 +15,7 @@ if (!getApps().length) {
     initializeApp({
       credential: cert(JSON.parse(serviceAccountKey)),
     });
-    console.log("✅ Firebase Admin initialized successfully.");
+    console.log("✅ Firebase Admin initialized in credentials route");
   } catch (error: unknown) {
     console.error("❌ Firebase Admin initialization error", error);
     throw error;
@@ -24,14 +24,21 @@ if (!getApps().length) {
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('🔍 GET /api/stream/credentials - Start');
+    
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('❌ No auth header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
     const token = authHeader.split(' ')[1];
+    console.log('🔍 Verifying token...');
+    
     const decodedToken = await getAuth().verifyIdToken(token);
     const userId = decodedToken.uid;
+    
+    console.log('✅ Token verified for user:', userId);
 
     const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
@@ -44,7 +51,7 @@ export async function GET(request: NextRequest) {
     
     const urlWithQuery = `${backendUrl}/stream/credentials?userId=${encodeURIComponent(userId)}`;
     
-    console.log('📡 Fetching existing credentials for:', userId);
+    console.log('📡 Calling backend:', urlWithQuery);
     
     const response = await fetch(urlWithQuery, {
       method: 'GET',
@@ -54,26 +61,26 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log('📥 Backend response status:', response.status);
+    console.log('📥 Backend response:', response.status);
 
     if (response.ok) {
       const data = await response.json();
       
       if (data.exists === false) {
-        console.log('ℹ️ No existing credentials found');
+        console.log('ℹ️ No existing credentials');
         return NextResponse.json({ exists: false }, { status: 200 });
       }
       
       const hlsBaseUrl = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
       
       if (!hlsBaseUrl) {
-        console.error("❌ HLS_BASE_URL is not set!");
+        console.error("❌ HLS_BASE_URL not set!");
         return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
       }
       
       const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
 
-      console.log('✅ Returning existing credentials');
+      console.log('✅ Returning credentials');
       
       return NextResponse.json({
         ...data,
@@ -82,14 +89,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (response.status === 404) {
-      console.log('ℹ️ No stream found (404)');
+      console.log('ℹ️ 404 from backend');
       return NextResponse.json({ exists: false }, { status: 200 });
     }
 
     const errorText = await response.text();
     console.error('❌ Backend error:', response.status, errorText);
     return NextResponse.json(
-      { error: 'Failed to fetch status from backend', details: errorText }, 
+      { error: 'Failed to fetch from backend', details: errorText }, 
       { status: response.status }
     );
 
@@ -101,7 +108,7 @@ export async function GET(request: NextRequest) {
     }
     
     return NextResponse.json({ 
-      error: 'Internal server error in API proxy',
+      error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
@@ -109,29 +116,30 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔍 POST /api/stream/credentials - Start');
+    
     const authHeader = request.headers.get('Authorization');
     if (!authHeader) {
+      console.error('❌ No auth header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const token = authHeader.split(' ')[1];
+    console.log('🔍 Verifying token...');
+    
     const decodedToken = await getAuth().verifyIdToken(token);
     const userId = decodedToken.uid;
     
-    console.log('🔍 Creating credentials for user:', userId);
+    console.log('✅ Token verified for user:', userId);
     
-    // Get user details from Firebase Auth
+    // Get user details from Firebase
     const userRecord = await getAuth().getUser(userId);
     
-    console.log('👤 User details:', {
-      uid: userRecord.uid,
-      email: userRecord.email,
-      displayName: userRecord.displayName,
-    });
+    console.log('👤 User:', userRecord.email);
 
     const formData = await request.formData();
     
-    // Add user details to form data
+    // Add user details
     formData.append('userId', userId);
     formData.append('email', userRecord.email || '');
     formData.append('displayName', userRecord.displayName || userRecord.email?.split('@')[0] || 'User');
@@ -147,7 +155,7 @@ export async function POST(request: NextRequest) {
     
     const backendEndpoint = `${backendUrl}/stream/credentials`;
     
-    console.log('📡 Sending to backend:', backendEndpoint);
+    console.log('📡 Calling backend:', backendEndpoint);
     
     const response = await fetch(backendEndpoint, {
       method: 'POST',
@@ -173,13 +181,13 @@ export async function POST(request: NextRequest) {
     const hlsBaseUrl = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
     if (!hlsBaseUrl) {
-      console.error("❌ HLS_BASE_URL is not set!");
+      console.error("❌ HLS_BASE_URL not set!");
       return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
     }
     
     const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
 
-    console.log('✅ Credentials created successfully');
+    console.log('✅ Credentials created');
 
     return NextResponse.json({
       ...data,
