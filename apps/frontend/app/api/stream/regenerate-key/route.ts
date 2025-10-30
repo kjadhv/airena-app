@@ -1,20 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from "firebase-admin/auth";
+
+// Firebase Admin initialization - CRITICAL!
+if (!getApps().length) {
+  try {
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    
+    if (!serviceAccountKey) {
+      console.error("❌ FIREBASE_SERVICE_ACCOUNT_KEY is not set!");
+      throw new Error("Firebase service account key is missing");
+    }
+    
+    initializeApp({
+      credential: cert(JSON.parse(serviceAccountKey)),
+    });
+    console.log("✅ Firebase Admin initialized in regenerate-key route");
+  } catch (error: unknown) {
+    console.error("❌ Firebase Admin initialization error", error);
+    throw error;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔄 POST /api/stream/regenerate-key - Start');
+    
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('❌ No auth header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const token = authHeader.split(' ')[1];
+    console.log('🔍 Verifying token...');
+    
     const decodedToken = await getAuth().verifyIdToken(token);
     const userId = decodedToken.uid;
 
-    console.log('🔄 Regenerating stream key for:', userId);
+    console.log('✅ Token verified, regenerating key for:', userId);
 
     const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    console.log('🔍 Backend URL:', backendUrl);
     
     if (!backendUrl) {
       console.error("❌ Backend URL not configured");
@@ -46,7 +74,7 @@ export async function POST(request: NextRequest) {
     const hlsBaseUrl = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
     if (!hlsBaseUrl) {
-      console.error("❌ HLS_BASE_URL is not set!");
+      console.error("❌ HLS_BASE_URL not set!");
       return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
     }
     
