@@ -17,6 +17,7 @@ import Footer from "./components/Footer";
 import UserAvatar from "./components/UserAvatar";
 // import DiwaliCupBanner from "./components/EventBanner";
 import { db } from "./firebase/config";
+import FeaturedVideoSection from "./components/FeaturedVideoSection";
 
 interface Content {
   id: string;
@@ -280,6 +281,7 @@ export default function HomePage() {
           </section>
 
           <BigTournamentSection />
+            <FeaturedVideoSection />
           <FoundersClubSection />
         </main>
 
