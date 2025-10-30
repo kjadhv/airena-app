@@ -10,36 +10,58 @@ export class FirebaseService implements OnModuleInit {
   private app: admin.app.App; 
   private bucket!: Bucket;
   private readonly logger = new Logger(FirebaseService.name);
+  private isInitialized = false;
 
   constructor(private readonly configService: ConfigService) {
-    // Initialize Firebase in constructor instead of onModuleInit
-    const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
-    const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
-    const privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
+    try {
+      // Initialize Firebase in constructor
+      const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
+      const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
+      const privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
 
-    if (!projectId || !clientEmail || !privateKey) {
-      throw new Error('Firebase environment variables are not set. Please check your .env file.');
-    }
+      if (!projectId || !clientEmail || !privateKey) {
+        throw new Error('Firebase environment variables are not set. Please check your .env file.');
+      }
 
-    const serviceAccount = {
-      projectId,
-      clientEmail,
-      privateKey: privateKey.replace(/\\n/g, '\n'),
-    };
+      const serviceAccount = {
+        projectId,
+        clientEmail,
+        privateKey: privateKey.replace(/\\n/g, '\n'),
+      };
 
-    if (!admin.apps.length) {
-      this.app = admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        storageBucket: `${serviceAccount.projectId}.appspot.com`,
-      });
-    } else {
-      this.app = admin.app();
+      if (!admin.apps.length) {
+        this.app = admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+          storageBucket: `${serviceAccount.projectId}.appspot.com`,
+        });
+        this.logger.log('✅ Firebase Admin SDK initialized in constructor');
+      } else {
+        this.app = admin.app();
+        this.logger.log('✅ Firebase Admin SDK already initialized');
+      }
+    } catch (error) {
+      this.logger.error('❌ Failed to initialize Firebase in constructor:', error);
+      throw error;
     }
   }
 
-  onModuleInit() {
-    this.bucket = this.app.storage().bucket();
-    this.logger.log('Firebase Admin SDK initialized successfully.');
+  async onModuleInit() {
+    try {
+      this.bucket = this.app.storage().bucket();
+      
+      // Test Firestore connection
+      const db = this.getFirestore();
+      await db.listCollections();
+      
+      this.isInitialized = true;
+      this.logger.log('✅ Firebase Admin SDK and Firestore connection verified successfully');
+    } catch (error) {
+      this.logger.error('❌ Failed to verify Firestore connection:', error);
+      this.logger.warn('⚠️ Retrying in 5 seconds...');
+      
+      // Retry after 5 seconds
+      setTimeout(() => this.onModuleInit(), 5000);
+    }
   }
   
   getFirestore(): admin.firestore.Firestore {
@@ -54,6 +76,10 @@ export class FirebaseService implements OnModuleInit {
       throw new Error('Firebase app is not initialized');
     }
     return this.app.auth();
+  }
+
+  isReady(): boolean {
+    return this.isInitialized;
   }
 
   async uploadDirectory(directoryPath: string, destinationPath: string): Promise<string> {
