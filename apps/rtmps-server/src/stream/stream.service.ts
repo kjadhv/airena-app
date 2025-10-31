@@ -76,16 +76,24 @@ export class StreamService {
   }
   
   async getStreamCredentials(detailsDto: StreamDetailsDto, thumbnailFile: Express.Multer.File): Promise<StreamCredentials> {
-    this.logger.log(`Getting stream credentials for user: ${detailsDto.email}`);
+    this.logger.log(`🔑 Getting stream credentials for user: ${detailsDto.email}`);
     
+    // Find or create user
     const user = await this.findOrCreateUser(detailsDto);
+    
+    // Always generate a NEW stream key
+    const newStreamKey = this.generateStreamKey();
+    this.logger.log(`🎲 Generated NEW stream key: ${newStreamKey}`);
+    
+    // Find existing stream or create new one
     let stream = await this.streamRepository.findOne({ where: { userId: user.id } });
     
-    // FIX #1: ALWAYS generate a new stream key when credentials are requested
-    const newStreamKey = this.generateStreamKey();
-    
-    if (!stream) {
-      this.logger.log(`Creating new stream for user: ${user.email}`);
+    if (stream) {
+      this.logger.log(`📝 Updating existing stream. Old key: ${stream.streamKey} → New key: ${newStreamKey}`);
+      stream.streamKey = newStreamKey;
+      stream.isActive = false; // Ensure old stream is marked inactive
+    } else {
+      this.logger.log(`✨ Creating new stream for user: ${user.email}`);
       stream = this.streamRepository.create({
         user,
         userId: user.id,
@@ -94,28 +102,32 @@ export class StreamService {
         title: detailsDto.title || `${user.displayName}'s Stream`,
         isActive: false,
       });
-    } else {
-      this.logger.log(`Generating NEW stream key for existing stream. Old: ${stream.streamKey}, New: ${newStreamKey}`);
-      // Invalidate the old key and set the new one
-      stream.streamKey = newStreamKey;
-      stream.isActive = false; // Ensure old stream is marked as inactive
     }
     
+    // Upload thumbnail
     let thumbnailUrl = '';
     try {
-      thumbnailUrl = await this.saveThumbnailAndGetUrl(thumbnailFile, stream.streamKey);
-      this.logger.log(`✅ Thumbnail uploaded: ${thumbnailUrl}`);
+      if (thumbnailFile) {
+        thumbnailUrl = await this.saveThumbnailAndGetUrl(thumbnailFile, stream.streamKey);
+        this.logger.log(`✅ Thumbnail uploaded: ${thumbnailUrl}`);
+      } else {
+        this.logger.warn('⚠️ No thumbnail file provided');
+        thumbnailUrl = `https://placehold.co/1600x900/000000/FFFFFF?text=${encodeURIComponent(detailsDto.title || 'Stream')}`;
+      }
     } catch (error: any) {
-      this.logger.error(`Thumbnail upload failed, using placeholder: ${error.message}`);
+      this.logger.error(`❌ Thumbnail upload failed: ${error.message}`);
       thumbnailUrl = `https://placehold.co/1600x900/000000/FFFFFF?text=${encodeURIComponent(detailsDto.title || 'Stream')}`;
     }
 
+    // Update stream details
     stream.title = detailsDto.title;
     stream.description = detailsDto.description;
     stream.thumbnailUrl = thumbnailUrl;
+    
     await this.streamRepository.save(stream);
 
-    this.logger.log(`✅ NEW Stream credentials ready: ${stream.streamKey}`);
+    this.logger.log(`✅ Stream credentials ready: ${stream.streamKey}`);
+    this.logger.log(`📡 RTMP URL: ${this.RTMP_SERVER_URL}/${stream.streamKey}`);
 
     return {
       streamKey: stream.streamKey,
@@ -130,16 +142,21 @@ export class StreamService {
       return '';
     }
 
-    this.logger.log(`Uploading thumbnail for stream ${streamKey}`);
-    this.logger.log(`File: ${file.size} bytes, ${file.mimetype}`);
+    this.logger.log(`Starting thumbnail upload for stream ${streamKey}`);
+    this.logger.log(`File size: ${file.size} bytes, mimetype: ${file.mimetype}`);
+    this.logger.log(`Target bucket: ${this.storageBucketName}`);
     
     try {
       const bucket = getStorage().bucket();
+      this.logger.log('Bucket obtained, checking if it exists...');
       
       const [exists] = await bucket.exists();
       if (!exists) {
+        this.logger.error('❌ Storage bucket does not exist!');
         throw new Error(`Storage bucket does not exist. Check FIREBASE_STORAGE_BUCKET.`);
       }
+      
+      this.logger.log('✅ Bucket exists, uploading file...');
       
       const fileExtension = path.extname(file.originalname) || '.jpg';
       const fileName = `thumbnails/${streamKey}${fileExtension}`;
@@ -156,11 +173,21 @@ export class StreamService {
       await fileUpload.makePublic();
 
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+      this.logger.log(`✅ Thumbnail uploaded successfully: ${publicUrl}`);
       
       return publicUrl;
 
     } catch (error: any) {
-      this.logger.error(`Thumbnail upload failed: ${error.message}`);
+      this.logger.error(`Failed to upload thumbnail for stream ${streamKey}`);
+      this.logger.error(`Error message: ${error.message}`);
+      this.logger.error(`Error code: ${error.code}`);
+      
+      if (error.code === 404 || error.message.includes('does not exist')) {
+        this.logger.error(`BUCKET NOT FOUND! Current bucket name: ${this.storageBucketName}`);
+        this.logger.error(`Please verify this bucket name exists in Firebase Console -> Storage`);
+        this.logger.error(`Thumbnail upload failed, using placeholder`);
+      }
+      
       throw error;
     }
   }
@@ -174,7 +201,7 @@ export class StreamService {
       return null;
     }
     
-    this.logger.log(`Found user: ${user.email}`);
+    this.logger.log(`Found user: ${user.email} (ID: ${user.id})`);
     
     const stream = await this.streamRepository.findOne({ 
       where: { userId: user.id }, 
@@ -201,7 +228,7 @@ export class StreamService {
     
     const user = await this.userRepository.findOne({ where: { firebaseUid } });
     if (!user) {
-      this.logger.error(`❌ User not found: ${firebaseUid}`);
+      this.logger.error(`❌ User not found with firebaseUid: ${firebaseUid}`);
       throw new NotFoundException("User not found.");
     }
     
@@ -213,7 +240,7 @@ export class StreamService {
 
     const oldKey = stream.streamKey;
     stream.streamKey = this.generateStreamKey();
-    stream.isActive = false; // Mark stream as inactive when key is regenerated
+    stream.isActive = false;
     await this.streamRepository.save(stream);
 
     this.logger.log(`✅ Stream key regenerated: ${oldKey} → ${stream.streamKey}`);
@@ -236,7 +263,7 @@ export class StreamService {
     });
     
     if (!stream) {
-      this.logger.warn(`Stream not found for key ${streamKey}`);
+      this.logger.warn(`⚠️ Stream not found for key ${streamKey} - it may have been regenerated`);
       return;
     }
     
@@ -276,34 +303,57 @@ export class StreamService {
   }
 
   private async findOrCreateUser(userDto: { userId: string, email: string, displayName: string }): Promise<User> {
+    // Validate input
+    if (!userDto.userId) {
+      throw new Error('userId (firebaseUid) is required');
+    }
+    if (!userDto.email) {
+      throw new Error('email is required');
+    }
+    
+    this.logger.log(`🔍 Looking for user with firebaseUid: ${userDto.userId}`);
+    
     let user = await this.userRepository.findOne({ where: { firebaseUid: userDto.userId } });
     
     if (user) {
-      this.logger.log(`Found existing user: ${user.email}`);
+      this.logger.log(`✅ Found existing user: ${user.email} (ID: ${user.id})`);
       
       // Update user info if it changed
-      if (user.email !== userDto.email || user.displayName !== userDto.displayName) {
+      let needsUpdate = false;
+      if (user.email !== userDto.email) {
+        this.logger.log(`📝 Updating email: ${user.email} → ${userDto.email}`);
         user.email = userDto.email;
+        needsUpdate = true;
+      }
+      if (user.displayName !== userDto.displayName) {
+        this.logger.log(`📝 Updating displayName: ${user.displayName} → ${userDto.displayName}`);
         user.displayName = userDto.displayName;
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
         await this.userRepository.save(user);
-        this.logger.log(`Updated user info for: ${user.email}`);
+        this.logger.log(`✅ User info updated`);
       }
       
       return user;
     }
 
-    this.logger.log(`Creating new user: ${userDto.email}`);
+    this.logger.log(`✨ Creating new user: ${userDto.email}`);
     
     const newUser = this.userRepository.create({
       firebaseUid: userDto.userId,
       email: userDto.email,
-      displayName: userDto.displayName || "New User",
+      displayName: userDto.displayName || userDto.email.split('@')[0] || "New User",
     });
     
-    return this.userRepository.save(newUser);
+    const savedUser = await this.userRepository.save(newUser);
+    this.logger.log(`✅ New user created with ID: ${savedUser.id}`);
+    
+    return savedUser;
   }
 
   private generateStreamKey(): string {
-    return `live_${randomBytes(12).toString("hex")}`;
+    return `{randomBytes(16).toString("hex")}`;
   }
 }
