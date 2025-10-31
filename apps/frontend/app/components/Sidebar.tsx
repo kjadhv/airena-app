@@ -177,6 +177,7 @@ export default function Sidebar() {
           <div className="border-t border-white/10 pt-4 mt-4">
             {user ? (
               <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 group transition-all">
+                <Link href="/profile">
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
@@ -186,7 +187,7 @@ export default function Sidebar() {
                 ) : (
                   <UserCircle size={40} className="text-gray-400" />
                 )}
-
+                </Link>
                 <div
                   className={`transition-all ${
                     isExpanded ? "opacity-100 ml-2" : "opacity-0 w-0"
