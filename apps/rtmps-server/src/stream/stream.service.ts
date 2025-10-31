@@ -81,11 +81,24 @@ export class StreamService {
     const user = await this.findOrCreateUser(detailsDto);
     let stream = await this.streamRepository.findOne({ where: { userId: user.id } });
     
+    // FIX #1: ALWAYS generate a new stream key when credentials are requested
+    const newStreamKey = this.generateStreamKey();
+    
     if (!stream) {
       this.logger.log(`Creating new stream for user: ${user.email}`);
-      stream = await this.createStreamForUser(user);
+      stream = this.streamRepository.create({
+        user,
+        userId: user.id,
+        streamKey: newStreamKey,
+        streamUrl: `${this.RTMP_SERVER_URL}`,
+        title: detailsDto.title || `${user.displayName}'s Stream`,
+        isActive: false,
+      });
     } else {
-      this.logger.log(`Found existing stream: ${stream.streamKey}`);
+      this.logger.log(`Generating NEW stream key for existing stream. Old: ${stream.streamKey}, New: ${newStreamKey}`);
+      // Invalidate the old key and set the new one
+      stream.streamKey = newStreamKey;
+      stream.isActive = false; // Ensure old stream is marked as inactive
     }
     
     let thumbnailUrl = '';
@@ -102,7 +115,7 @@ export class StreamService {
     stream.thumbnailUrl = thumbnailUrl;
     await this.streamRepository.save(stream);
 
-    this.logger.log(`✅ Stream credentials ready for: ${stream.streamKey}`);
+    this.logger.log(`✅ NEW Stream credentials ready: ${stream.streamKey}`);
 
     return {
       streamKey: stream.streamKey,
@@ -184,23 +197,23 @@ export class StreamService {
   }
 
   async regenerateStreamKey(firebaseUid: string): Promise<StreamCredentials> {
-    this.logger.log(`Regenerating stream key for firebaseUid: ${firebaseUid}`);
+    this.logger.log(`🔄 Regenerating stream key for firebaseUid: ${firebaseUid}`);
     
     const user = await this.userRepository.findOne({ where: { firebaseUid } });
     if (!user) {
-      this.logger.error(`User not found: ${firebaseUid}`);
+      this.logger.error(`❌ User not found: ${firebaseUid}`);
       throw new NotFoundException("User not found.");
     }
     
     const stream = await this.streamRepository.findOne({ where: { userId: user.id } });
     if (!stream) {
-      this.logger.error(`Stream not found for user: ${user.email}`);
+      this.logger.error(`❌ Stream not found for user: ${user.email}`);
       throw new NotFoundException("Stream not found for the user.");
     }
 
     const oldKey = stream.streamKey;
     stream.streamKey = this.generateStreamKey();
-    stream.isActive = false;
+    stream.isActive = false; // Mark stream as inactive when key is regenerated
     await this.streamRepository.save(stream);
 
     this.logger.log(`✅ Stream key regenerated: ${oldKey} → ${stream.streamKey}`);
@@ -255,10 +268,10 @@ export class StreamService {
         stream.userId
       );
       
-      this.logger.log(`✅ VOD created for stream ${stream.streamKey} (video ID: ${video.id})`);
+      this.logger.log(`✅ VOD created successfully for stream ${stream.streamKey} with video ID ${video.id}`);
       
     } catch (error: any) {
-      this.logger.error(`Failed to create VOD for stream ${stream.streamKey}: ${error.message}`);
+      this.logger.error(`❌ Failed to create VOD for stream ${stream.streamKey}: ${error.message}`);
     }
   }
 
@@ -288,19 +301,6 @@ export class StreamService {
     });
     
     return this.userRepository.save(newUser);
-  }
-
-  private async createStreamForUser(user: User): Promise<Stream> {
-    const streamKey = this.generateStreamKey();
-    const newStream = this.streamRepository.create({
-      user,
-      userId: user.id,
-      streamKey,
-      streamUrl: `${this.RTMP_SERVER_URL}`,
-      title: `${user.displayName}'s Stream`,
-      isActive: false,
-    });
-    return this.streamRepository.save(newStream);
   }
 
   private generateStreamKey(): string {

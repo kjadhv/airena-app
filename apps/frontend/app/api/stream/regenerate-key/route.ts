@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from "firebase-admin/auth";
 
-// Firebase Admin initialization - CRITICAL!
+// Firebase Admin initialization
 if (!getApps().length) {
   try {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -36,26 +36,27 @@ export async function POST(request: NextRequest) {
     console.log('🔍 Verifying token...');
     
     const decodedToken = await getAuth().verifyIdToken(token);
-    const userId = decodedToken.uid;
+    const firebaseUid = decodedToken.uid; // 🔥 FIX #2: Use firebaseUid, not userId
 
-    console.log('✅ Token verified, regenerating key for:', userId);
+    console.log('✅ Token verified, regenerating key for Firebase UID:', firebaseUid);
 
     const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
-    console.log('🔍 Backend URL:', backendUrl);
+    console.log('🌐 Backend URL:', backendUrl);
     
     if (!backendUrl) {
       console.error("❌ Backend URL not configured");
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
+    // 🔥 FIX #2: Send firebaseUid instead of userId
     const response = await fetch(`${backendUrl}/stream/regenerate-key`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': authHeader,
       },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ userId: firebaseUid }), // This will be interpreted as firebaseUid in the backend
     });
 
     console.log('📥 Backend response:', response.status);
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     
     const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
 
-    console.log('✅ Stream key regenerated');
+    console.log('✅ Stream key regenerated successfully');
 
     return NextResponse.json({
       ...data,
