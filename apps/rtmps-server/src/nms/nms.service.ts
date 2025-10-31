@@ -57,12 +57,16 @@ export class NmsService implements OnModuleInit {
       trans: {
         ffmpeg: ffmpegPath,
         tasks: [{ 
-          app: 'live', 
+          app: 'live',
+          // Enable FLV recording for VOD creation
+          flv: true,
+          flvFlags: '[flvflags=no_duration_filesize]',
+          // Enable HLS for live playback
           hls: true, 
           // 🔥 FIX #3: Set hlsKeep to false to delete segments when stream ends
           // This prevents old stream segments from being served on reconnect
           hlsFlags: '[hls_time=2:hls_list_size=3:hls_flags=delete_segments]',
-          hlsKeep: false, // Changed from true to false
+          hlsKeep: false, // Deletes HLS after stream ends (prevents old content bug)
         }]
       },
     };
@@ -85,7 +89,7 @@ export class NmsService implements OnModuleInit {
     try {
       const payload = { streamKey, isActive };
       await firstValueFrom(
-        this.httpService.post(this.API_HOOK_URL, payload)
+        this.httpService.post(this.API_HOOK_URL, payload, { timeout: 5000 })
       );
       this.logger.log(`[HOOK] Successfully notified API for stream '${streamKey}'.`);
     } catch (error) {
