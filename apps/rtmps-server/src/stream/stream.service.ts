@@ -354,6 +354,6 @@ export class StreamService {
   }
 
   private generateStreamKey(): string {
-    return `{randomBytes(16).toString("hex")}`;
+    return `${randomBytes(16).toString("hex")}`;
   }
 }
