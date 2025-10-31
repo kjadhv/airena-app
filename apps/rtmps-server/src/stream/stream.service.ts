@@ -16,12 +16,16 @@ export interface StreamCredentials {
   playbackUrl: string;
 }
 
+// ✅ UPDATED: Added streamKey, playbackUrl, and isActive
 export interface LiveStreamDto {
   id: string;
   title: string;
   thumbnailUrl?: string;
   authorName: string;
   authorPhotoURL: string | null;
+  streamKey: string;
+  playbackUrl: string;
+  isActive: boolean;
 }
 
 interface StreamDetailsDto {
@@ -59,6 +63,7 @@ export class StreamService {
     this.logger.log(`Firebase Storage bucket configured: ${this.storageBucketName}`);
   }
 
+  // ✅ UPDATED: Now returns streamKey, playbackUrl, and isActive
   async getActiveStreams(): Promise<LiveStreamDto[]> {
     const streams = await this.streamRepository.find({
       where: { isActive: true }, 
@@ -72,6 +77,9 @@ export class StreamService {
       thumbnailUrl: stream.thumbnailUrl || `https://placehold.co/1600x900/000000/FFFFFF?text=${encodeURIComponent(stream.title || 'Live')}`,
       authorName: stream.user?.displayName || "Unknown Streamer",
       authorPhotoURL: stream.user?.photoURL || null,
+      streamKey: stream.streamKey,
+      playbackUrl: `${this.HLS_BASE_URL}/live/${stream.streamKey}/index.m3u8`,
+      isActive: stream.isActive,
     }));
   }
   
@@ -91,7 +99,7 @@ export class StreamService {
     if (stream) {
       this.logger.log(`📝 Updating existing stream. Old key: ${stream.streamKey} → New key: ${newStreamKey}`);
       stream.streamKey = newStreamKey;
-      stream.isActive = false; // Ensure old stream is marked inactive
+      stream.isActive = false;
     } else {
       this.logger.log(`✨ Creating new stream for user: ${user.email}`);
       stream = this.streamRepository.create({
@@ -303,7 +311,6 @@ export class StreamService {
   }
 
   private async findOrCreateUser(userDto: { userId: string, email: string, displayName: string }): Promise<User> {
-    // Validate input
     if (!userDto.userId) {
       throw new Error('userId (firebaseUid) is required');
     }
@@ -318,7 +325,6 @@ export class StreamService {
     if (user) {
       this.logger.log(`✅ Found existing user: ${user.email} (ID: ${user.id})`);
       
-      // Update user info if it changed
       let needsUpdate = false;
       if (user.email !== userDto.email) {
         this.logger.log(`📝 Updating email: ${user.email} → ${userDto.email}`);
@@ -341,11 +347,13 @@ export class StreamService {
 
     this.logger.log(`✨ Creating new user: ${userDto.email}`);
     
-    const newUser = this.userRepository.create({
-      firebaseUid: userDto.userId,
-      email: userDto.email,
-      displayName: userDto.displayName || userDto.email.split('@')[0] || "New User",
-    });
+    // ✅ FIXED: Use proper object structure that matches User entity
+    const newUser = new User();
+    newUser.firebaseUid = userDto.userId;
+    newUser.email = userDto.email;
+    newUser.displayName = userDto.displayName || userDto.email.split('@')[0] || "New User";
+    newUser.isCreator = false;
+    newUser.isAdmin = false;
     
     const savedUser = await this.userRepository.save(newUser);
     this.logger.log(`✅ New user created with ID: ${savedUser.id}`);
@@ -354,6 +362,6 @@ export class StreamService {
   }
 
   private generateStreamKey(): string {
-    return `${randomBytes(16).toString("hex")}`;
+    return randomBytes(16).toString("hex");
   }
 }
