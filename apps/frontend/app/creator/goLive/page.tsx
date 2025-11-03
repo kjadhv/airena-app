@@ -50,6 +50,8 @@ const GoLivePage = () => {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [streamStartTime, setStreamStartTime] = useState<Date | null>(null);
   const [uptime, setUptime] = useState("00:00:00");
+  const [playerKey, setPlayerKey] = useState(0);
+  const [isStreamReady, setIsStreamReady] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.push("/");
@@ -172,6 +174,8 @@ const GoLivePage = () => {
       setCredentials(data);
       setIsLive(false);
       setStreamStartTime(null);
+      setIsStreamReady(false);
+      setPlayerKey(prev => prev + 1);
     } catch (err) {
       setError((err as Error).message || "Failed to regenerate key");
     } finally {
@@ -196,11 +200,20 @@ const GoLivePage = () => {
         if (res.ok) {
           const status: StreamStatus = await res.json();
           const currentlyLive = status.isActive;
+          const wasLive = isLive;
           setIsLive(currentlyLive);
+          
           if (currentlyLive && !streamStartTime) {
             setStreamStartTime(new Date(status.lastActiveAt || Date.now()));
           } else if (!currentlyLive) {
             setStreamStartTime(null);
+            setIsStreamReady(false);
+          }
+          
+          // If stream just went live, refresh the player
+          if (currentlyLive && !wasLive) {
+            setPlayerKey(prev => prev + 1);
+            setIsStreamReady(false);
           }
         }
       } catch (err) { 
@@ -209,7 +222,27 @@ const GoLivePage = () => {
     };
     const interval = setInterval(pollStreamStatus, 5000);
     return () => clearInterval(interval);
-  }, [credentials?.streamKey, streamStartTime]);
+  }, [credentials?.streamKey, streamStartTime, isLive]);
+
+  // Auto-refresh player when stream is live but not ready
+  useEffect(() => {
+    if (!isLive || isStreamReady) return;
+    
+    const refreshInterval = setInterval(() => {
+      console.log('Refreshing player to check for stream availability...');
+      setPlayerKey(prev => prev + 1);
+    }, 5000); // Refresh every 5 seconds
+    
+    // Set stream as ready after 10 seconds (assume it loaded)
+    const readyTimeout = setTimeout(() => {
+      setIsStreamReady(true);
+    }, 10000);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      clearTimeout(readyTimeout);
+    };
+  }, [isLive, isStreamReady]);
 
   useEffect(() => {
     if (!streamStartTime) {
@@ -304,7 +337,7 @@ const GoLivePage = () => {
               <div className="w-full aspect-video bg-black rounded-xl overflow-hidden relative">
                 {credentials?.playbackUrl ? (
                   <AirenaVideoPlayer
-                    key={credentials.playbackUrl} 
+                    key={`${credentials.playbackUrl}-${playerKey}`}
                     videoUrl={credentials.playbackUrl}
                     poster={thumbnailPreview || "/api/placeholder/1280/720"}
                     autoPlay
@@ -320,6 +353,15 @@ const GoLivePage = () => {
                      <div className="text-center">
                        <div className="text-gray-300 mb-2 text-lg">Stream Preview</div>
                        <div className="text-sm text-gray-400">Start streaming in OBS to see live preview</div>
+                     </div>
+                   </div>
+                )}
+                {isLive && !isStreamReady && (
+                   <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-none">
+                     <div className="text-center">
+                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-3"></div>
+                       <div className="text-gray-300 mb-2 text-lg">Connecting to Stream...</div>
+                       <div className="text-sm text-gray-400">Please wait while we load your stream</div>
                      </div>
                    </div>
                 )}
