@@ -3,19 +3,27 @@ import React, { useRef, useState, useEffect } from "react";
 import Hls from "hls.js";
 import type { Level } from "hls.js";
 import {
-  Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize2, Minimize2,
+  Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize2, Minimize2, Settings,
 } from "lucide-react";
 
+// Quality option for regular videos
+interface VideoQuality {
+  label: string; // e.g., "1080p", "720p", "480p", "360p"
+  url: string;
+}
+
 interface AirenaVideoPlayerProps {
-  videoUrl: string;
+  videoUrl: string; // Primary video URL (used for HLS or single quality)
+  videoQualities?: VideoQuality[]; // Optional: Multiple quality URLs for regular videos
   poster?: string;
   autoPlay?: boolean;
   muted?: boolean;
-  isLive?: boolean; // New prop to explicitly mark live streams
+  isLive?: boolean;
 }
 
 const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
   videoUrl,
+  videoQualities = [],
   poster,
   autoPlay = false,
   muted = false,
@@ -36,18 +44,35 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isHlsStream, setIsHlsStream] = useState(false);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
   
-  // VOD Quality options for non-HLS videos
-  const [vodQualities, setVodQualities] = useState<string[]>([]);
+  // VOD Quality for non-HLS videos
   const [currentVodQuality, setCurrentVodQuality] = useState<string>("");
+  const [activeVideoUrl, setActiveVideoUrl] = useState<string>(videoUrl);
 
-  // Detect if it's a live stream based on duration or isLive prop
+  // Detect if it's a live stream
   const isLiveStream = isLive || duration === Infinity;
 
-  // HLS Setup (for live streams or HLS VOD)
+  // Initialize video qualities
+  useEffect(() => {
+    if (videoQualities.length > 0) {
+      // Find the highest quality as default
+      const highestQuality = videoQualities[0];
+      setCurrentVodQuality(highestQuality.label);
+      setActiveVideoUrl(highestQuality.url);
+    } else {
+      setActiveVideoUrl(videoUrl);
+    }
+  }, [videoQualities, videoUrl]);
+
+  // HLS Setup
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    // Save current playback state
+    const savedTime = video.currentTime;
+    const wasPlaying = !video.paused;
 
     // Cleanup previous HLS instance
     if (hlsRef.current) {
@@ -55,25 +80,32 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
       hlsRef.current = null;
     }
 
-    const isHlsSource = videoUrl && videoUrl.endsWith(".m3u8");
+    const isHlsSource = activeVideoUrl && activeVideoUrl.endsWith(".m3u8");
     
-    // Use HLS for live streams OR if the source is .m3u8
-    if ((isLive || isHlsSource) && Hls.isSupported()) {
-      console.log("Loading HLS stream:", videoUrl);
+    // Use HLS for .m3u8 files
+    if (isHlsSource && Hls.isSupported()) {
+      console.log("Loading HLS stream:", activeVideoUrl);
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: isLive, // Enable low latency for live streams
+        lowLatencyMode: isLive,
+        startLevel: -1, // Auto quality
       });
       hlsRef.current = hls;
-      hls.loadSource(videoUrl);
+      hls.loadSource(activeVideoUrl);
       hls.attachMedia(video);
       setIsHlsStream(true);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         console.log("HLS Levels found:", hls.levels);
         setLevels(hls.levels);
-        setCurrentLevel(-1); // Auto quality
-        if (autoPlay) {
+        setCurrentLevel(-1);
+        
+        // Restore playback state
+        if (!isLive && savedTime > 0) {
+          video.currentTime = savedTime;
+        }
+        
+        if (autoPlay || wasPlaying) {
           video.muted = muted;
           video.play().catch(e => console.error("Autoplay failed:", e));
         }
@@ -104,24 +136,35 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         }
       });
     } 
-    // For Safari which supports HLS natively
+    // Safari native HLS support
     else if (isHlsSource && video.canPlayType("application/vnd.apple.mpegurl")) {
       console.log("Using native HLS support (Safari)");
-      video.src = videoUrl;
+      video.src = activeVideoUrl;
       setIsHlsStream(true);
+      
+      // Restore playback state
+      if (!isLive && savedTime > 0) {
+        video.currentTime = savedTime;
+      }
+      if (wasPlaying) {
+        video.play().catch(e => console.error("Play failed:", e));
+      }
     } 
-    // For regular video files (MP4, WebM, etc.)
+    // Regular video files
     else {
-      console.log("Loading regular video:", videoUrl);
-      video.src = videoUrl;
+      console.log("Loading regular video:", activeVideoUrl);
+      video.src = activeVideoUrl;
       setIsHlsStream(false);
       
-      // Parse quality from filename or URL if available
-      // Example: video_720p.mp4, video_1080p.mp4
-      const qualityMatch = videoUrl.match(/(\d{3,4})p/);
-      if (qualityMatch) {
-        setCurrentVodQuality(qualityMatch[1] + "p");
-      }
+      // Restore playback state after metadata loads
+      video.addEventListener('loadedmetadata', () => {
+        if (!isLive && savedTime > 0) {
+          video.currentTime = savedTime;
+        }
+        if (wasPlaying) {
+          video.play().catch(e => console.error("Play failed:", e));
+        }
+      }, { once: true });
     }
 
     return () => {
@@ -130,25 +173,41 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         hlsRef.current = null;
       }
     };
-  }, [videoUrl, autoPlay, muted, isLive]);
+  }, [activeVideoUrl, autoPlay, muted, isLive]);
 
   // Handle HLS quality change
-  const handleQualityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = parseInt(event.target.value, 10);
-    setCurrentLevel(val);
+  const handleHlsQualityChange = (levelIndex: number) => {
+    setCurrentLevel(levelIndex);
     if (hlsRef.current) {
-      hlsRef.current.currentLevel = val;
+      hlsRef.current.currentLevel = levelIndex;
     }
+    setShowQualityMenu(false);
     handleUserActivity();
   };
 
-  // Handle VOD quality change (if you have multiple quality URLs)
-  const handleVodQualityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const quality = event.target.value;
-    setCurrentVodQuality(quality);
-    // You would need to emit an event or callback here to switch the video URL
-    // For now, this is just a placeholder
-    console.log("VOD quality changed to:", quality);
+  // Handle VOD quality change
+  const handleVodQualityChange = (quality: VideoQuality) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const currentTime = video.currentTime;
+    const wasPlaying = !video.paused;
+
+    setCurrentVodQuality(quality.label);
+    setActiveVideoUrl(quality.url);
+    
+    // Wait for new video to load, then restore state
+    const handleLoadedMetadata = () => {
+      video.currentTime = currentTime;
+      if (wasPlaying) {
+        video.play().catch(e => console.error("Play failed:", e));
+      }
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    };
+    
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    
+    setShowQualityMenu(false);
     handleUserActivity();
   };
 
@@ -159,6 +218,7 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     controlsTimeout.current = setTimeout(() => {
       if (!isLiveStream || isPlaying) {
         setShowControls(false);
+        setShowQualityMenu(false);
       }
     }, 3000);
   };
@@ -303,6 +363,20 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
+  // Get current quality label
+  const getCurrentQualityLabel = () => {
+    if (isHlsStream) {
+      if (currentLevel === -1) return "Auto";
+      const level = levels[currentLevel];
+      return level?.height ? `${level.height}` : `Level ${currentLevel + 1}`;
+    } else if (videoQualities.length > 0) {
+      return currentVodQuality.replace('p', '');
+    }
+    return null;
+  };
+
+  const hasQualityOptions = (isHlsStream && levels.length > 0) || videoQualities.length > 1;
+
   return (
     <div
       className="relative w-full h-full bg-black rounded-xl overflow-hidden group"
@@ -327,43 +401,77 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Quality Selector - HLS Streams */}
-      {isHlsStream && levels.length > 0 && (
-        <div className="absolute top-4 right-4 z-30 flex items-center bg-gray-900/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-lg">
-          <label htmlFor="quality" className="text-white text-sm mr-2 font-medium">Quality</label>
-          <select
-            id="quality"
-            value={currentLevel}
-            onChange={handleQualityChange}
-            className="bg-black/50 text-white text-sm px-3 py-1 rounded border border-gray-600 hover:border-emerald-500 focus:outline-none focus:border-emerald-500 cursor-pointer"
-          >
-            <option value={-1}>Auto</option>
-            {levels.map((level, idx) => (
-              <option key={idx} value={idx}>
-                {level.height ? `${level.height}p` : `Level ${idx + 1}`}
-                {level.bitrate ? ` (${Math.round(level.bitrate / 1000)}kbps)` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Quality Selector - VOD (for future implementation with multiple quality URLs) */}
-      {!isHlsStream && vodQualities.length > 0 && (
-        <div className="absolute top-4 right-4 z-30 flex items-center bg-gray-900/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-lg">
-          <label htmlFor="vod-quality" className="text-white text-sm mr-2 font-medium">Quality</label>
-          <select
-            id="vod-quality"
-            value={currentVodQuality}
-            onChange={handleVodQualityChange}
-            className="bg-black/50 text-white text-sm px-3 py-1 rounded border border-gray-600 hover:border-emerald-500 focus:outline-none focus:border-emerald-500 cursor-pointer"
-          >
-            {vodQualities.map((quality) => (
-              <option key={quality} value={quality}>
-                {quality}
-              </option>
-            ))}
-          </select>
+      {/* Quality Menu */}
+      {hasQualityOptions && showQualityMenu && (
+        <div className="absolute bottom-20 left-4 z-30 bg-gray-900/95 backdrop-blur-sm rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-w-[200px]">
+          <div className="px-4 py-2 border-b border-gray-700">
+            <p className="text-white text-sm font-semibold">Quality</p>
+          </div>
+          <div className="max-h-[300px] overflow-y-auto">
+            {isHlsStream ? (
+              <>
+                <button
+                  onClick={() => handleHlsQualityChange(-1)}
+                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                    currentLevel === -1
+                      ? "bg-emerald-600 text-white font-medium"
+                      : "text-gray-300 hover:bg-gray-800"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Auto</span>
+                    {currentLevel === -1 && (
+                      <span className="text-xs">✓</span>
+                    )}
+                  </div>
+                </button>
+                {levels.map((level, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleHlsQualityChange(idx)}
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      currentLevel === idx
+                        ? "bg-emerald-600 text-white font-medium"
+                        : "text-gray-300 hover:bg-gray-800"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div>{level.height ? `${level.height}` : `Level ${idx + 1}`}</div>
+                        {level.bitrate && (
+                          <div className="text-xs text-gray-400">
+                            {Math.round(level.bitrate / 1000)} kbps
+                          </div>
+                        )}
+                      </div>
+                      {currentLevel === idx && (
+                        <span className="text-xs">✓</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </>
+            ) : (
+              videoQualities.map((quality) => (
+                <button
+                  key={quality.label}
+                  onClick={() => handleVodQualityChange(quality)}
+                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                    currentVodQuality === quality.label
+                      ? "bg-emerald-600 text-white font-medium"
+                      : "text-gray-300 hover:bg-gray-800"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{quality.label}</span>
+                    {currentVodQuality === quality.label && (
+                      <span className="text-xs">✓</span>
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -449,6 +557,23 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
               />
             </div>
 
+            {/* Quality Button - YouTube style on the left */}
+            {hasQualityOptions && (
+              <button
+                onClick={() => {
+                  setShowQualityMenu(!showQualityMenu);
+                  handleUserActivity();
+                }}
+                className={`ml-2 flex items-center gap-2 px-3 py-1.5 text-white transition-colors rounded-lg hover:bg-white/10 ${
+                  showQualityMenu ? "bg-white/20" : ""
+                }`}
+                aria-label="Quality settings"
+              >
+                <Settings size={18} />
+                <span className="text-xs font-medium">{getCurrentQualityLabel()}</span>
+              </button>
+            )}
+
             {/* Live Indicator */}
             {isLiveStream && (
               <div className="ml-4 flex items-center gap-2 px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-md">
@@ -460,12 +585,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
 
           {/* Right side controls */}
           <div className="flex items-center gap-1">
-            {/* Stream Type Indicator */}
-            {isHlsStream && !isLiveStream && (
-              <div className="mr-2 px-2 py-1 bg-emerald-600/20 text-emerald-400 text-xs font-medium rounded border border-emerald-500/30">
-                HLS
-              </div>
-            )}
 
             {/* Fullscreen */}
             <button 
