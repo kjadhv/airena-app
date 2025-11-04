@@ -45,6 +45,8 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isHlsStream, setIsHlsStream] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   
   // VOD Quality for non-HLS videos
   const [currentVodQuality, setCurrentVodQuality] = useState<string>("");
@@ -69,6 +71,10 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    // Reset error state when URL changes
+    setHasError(false);
+    setErrorMessage("");
 
     // Save current playback state
     const savedTime = video.currentTime;
@@ -128,18 +134,42 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         console.error("HLS Error:", data);
+        
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
+              // Check if it's a 404 or other unrecoverable network error
+              if (data.response?.code === 404) {
+                console.error("Stream not found (404). Stopping playback.");
+                setHasError(true);
+                setErrorMessage("Stream not available");
+                hls.destroy();
+                return;
+              }
+              
+              // For other network errors, try recovery once
               console.log("Network error, trying to recover...");
               hls.startLoad();
+              
+              // Set a timeout to give up if recovery doesn't work
+              setTimeout(() => {
+                if (video.paused && video.readyState < 2) {
+                  setHasError(true);
+                  setErrorMessage("Unable to load stream");
+                  hls.destroy();
+                }
+              }, 5000);
               break;
+              
             case Hls.ErrorTypes.MEDIA_ERROR:
               console.log("Media error, trying to recover...");
               hls.recoverMediaError();
               break;
+              
             default:
-              console.log("Fatal error, destroying HLS instance");
+              console.log("Fatal error, stopping playback");
+              setHasError(true);
+              setErrorMessage("Playback error occurred");
               hls.destroy();
               break;
           }
@@ -385,7 +415,7 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     return null;
   };
 
-  const hasQualityOptions = (isHlsStream && levels.length > 0) || videoQualities.length > 1;
+  const hasQualityOptions = (isHlsStream && levels.length > 1 && levels.some(l => l.height > 0)) || videoQualities.length > 1;
 
   return (
     <div
@@ -408,6 +438,25 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
       {showCenterPause && (
         <div className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 z-20 pointer-events-none">
           <Pause size={80} className="text-white opacity-80" />
+        </div>
+      )}
+
+      {/* Error Overlay */}
+      {hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-30">
+          <div className="text-center px-6">
+            <div className="mb-4">
+              <svg className="w-16 h-16 mx-auto text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="text-white text-xl font-semibold mb-2">{errorMessage}</h3>
+            <p className="text-gray-400 text-sm">
+              {errorMessage === "Stream not available" 
+                ? "The stream you're trying to watch is currently offline or unavailable."
+                : "There was a problem loading the video. Please try again later."}
+            </p>
+          </div>
         </div>
       )}
 
