@@ -97,6 +97,16 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         console.log("HLS Levels found:", hls.levels);
+        console.log("Number of levels:", hls.levels.length);
+        hls.levels.forEach((level, idx) => {
+          console.log(`Level ${idx}:`, {
+            height: level.height,
+            width: level.width,
+            bitrate: level.bitrate,
+            name: level.name,
+            url: level.url
+          });
+        });
         setLevels(hls.levels);
         setCurrentLevel(-1);
         
@@ -403,7 +413,7 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
 
       {/* Quality Menu */}
       {hasQualityOptions && showQualityMenu && (
-        <div className="absolute bottom-20 left-4 z-30 bg-gray-900/95 backdrop-blur-sm rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-w-[200px]">
+        <div className="absolute bottom-20 right-4 z-30 bg-gray-900/95 backdrop-blur-sm rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-w-[200px]">
           <div className="px-4 py-2 border-b border-gray-700">
             <p className="text-white text-sm font-semibold">Quality</p>
           </div>
@@ -557,23 +567,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
               />
             </div>
 
-            {/* Quality Button - YouTube style on the left */}
-            {hasQualityOptions && (
-              <button
-                onClick={() => {
-                  setShowQualityMenu(!showQualityMenu);
-                  handleUserActivity();
-                }}
-                className={`ml-2 flex items-center gap-2 px-3 py-1.5 text-white transition-colors rounded-lg hover:bg-white/10 ${
-                  showQualityMenu ? "bg-white/20" : ""
-                }`}
-                aria-label="Quality settings"
-              >
-                <Settings size={18} />
-                <span className="text-xs font-medium">{getCurrentQualityLabel()}</span>
-              </button>
-            )}
-
             {/* Live Indicator */}
             {isLiveStream && (
               <div className="ml-4 flex items-center gap-2 px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-md">
@@ -585,6 +578,22 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
 
           {/* Right side controls */}
           <div className="flex items-center gap-1">
+            {/* Quality Button */}
+            {hasQualityOptions && (
+              <button
+                onClick={() => {
+                  setShowQualityMenu(!showQualityMenu);
+                  handleUserActivity();
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 text-white transition-colors rounded-lg hover:bg-white/10 ${
+                  showQualityMenu ? "bg-white/20" : ""
+                }`}
+                aria-label="Quality settings"
+              >
+                <Settings size={18} />
+                <span className="text-xs font-medium">{getCurrentQualityLabel()}</span>
+              </button>
+            )}
 
             {/* Fullscreen */}
             <button 
