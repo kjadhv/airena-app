@@ -60,12 +60,9 @@ const VideoPlayerPage = () => {
     return () => unsubscribe();
   }, [videoId]);
 
-  // This useEffect handles logging the unique view for the video
   useEffect(() => {
     const logView = async () => {
-      // Run only if we have a videoId and haven't already logged a view this session
       if (videoId && !viewLoggedRef.current) {
-        // Immediately set the flag to true to prevent re-runs
         viewLoggedRef.current = true;
 
         try {
@@ -75,13 +72,11 @@ const VideoPlayerPage = () => {
             headers.append('Authorization', `Bearer ${token}`);
           }
           
-          // ✅ FIXED: Call the correct API path
           const response = await fetch(`/api/videos/${videoId}`, {
             method: 'POST',
             headers: headers,
           });
 
-          // ✅ Check if the API returned an error (e.g., 404, 500)
           if (!response.ok) {
             throw new Error(`API call failed with status: ${response.status}`);
           }
@@ -90,8 +85,7 @@ const VideoPlayerPage = () => {
           console.log('View logged:', data.message);
 
         } catch (error) {
-          // This block now catches both network errors and API errors
-          viewLoggedRef.current = false; // Reset the flag so it can try again later
+          viewLoggedRef.current = false;
           console.error("Failed to log view:", error);
         }
       }
@@ -132,9 +126,18 @@ const VideoPlayerPage = () => {
       <Header />
       <main className="flex-grow pt-20 flex flex-col items-center" style={{ marginLeft: "var(--sidebar-width, 0rem)" }}>
         <div className="w-full max-w-5xl mx-auto px-2">
-          {/* Video Player */}
+          {/* Video Player - ✅ NOW WITH TRACKING PROPS */}
           <div className="relative aspect-video bg-black rounded-2xl overflow-hidden mb-4">
-            <AirenaVideoPlayer videoUrl={videoData.videoUrl} poster={videoData.thumbnailUrl} />
+            <AirenaVideoPlayer 
+              videoUrl={videoData.videoUrl} 
+              poster={videoData.thumbnailUrl}
+              isLive={videoData.isLive}
+              userId={user?.uid}
+              contentId={videoId}
+              contentTitle={videoData.title}
+              thumbnailUrl={videoData.thumbnailUrl}
+              authorName={videoData.authorName}
+            />
             <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
               {videoData.isLive && (
                 <div className="bg-red-500 px-3 py-1 rounded-md flex items-center gap-2">
@@ -179,4 +182,4 @@ const VideoPlayerPage = () => {
   );
 };
 
-export default VideoPlayerPage; 
+export default VideoPlayerPage;

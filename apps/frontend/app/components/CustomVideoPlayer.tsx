@@ -5,6 +5,8 @@ import type { Level } from "hls.js";
 import {
   Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize2, Minimize2, Settings,
 } from "lucide-react";
+import { doc, setDoc, increment, serverTimestamp } from "firebase/firestore";
+import { db } from "@/app/firebase/config";
 
 interface VideoQuality {
   label: string;
@@ -12,12 +14,18 @@ interface VideoQuality {
 }
 
 interface AirenaVideoPlayerProps {
-  videoUrl: string; // HLS master.m3u8 for ABR
-  videoQualities?: VideoQuality[]; // VOD static fallback
+  videoUrl: string;
+  videoQualities?: VideoQuality[];
   poster?: string;
   autoPlay?: boolean;
   muted?: boolean;
   isLive?: boolean;
+  // Props for watch time tracking
+  userId?: string;
+  contentId?: string;
+  contentTitle?: string;
+  thumbnailUrl?: string;
+  authorName?: string;
 }
 
 const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
@@ -27,6 +35,11 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
   autoPlay = false,
   muted = false,
   isLive = false,
+  userId,
+  contentId,
+  contentTitle,
+  thumbnailUrl,
+  authorName,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -46,14 +59,105 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // VOD fallback
   const [currentVodQuality, setCurrentVodQuality] = useState<string>("");
   const [activeVideoUrl, setActiveVideoUrl] = useState<string>(videoUrl);
 
   const isLiveStream = isLive || duration === Infinity;
   const isHlsStream = activeVideoUrl.endsWith(".m3u8");
 
-  // Default active quality
+  // ========================================================================
+  // WATCH TIME TRACKING - TRACKS EVERY SECOND
+  // ========================================================================
+  useEffect(() => {
+    if (!userId || !contentId) return;
+
+    let lastSaveTime = Date.now();
+    let accumulatedSeconds = 0;
+    
+    // Track watch time every second while playing
+    const trackInterval = setInterval(async () => {
+      // Only track if video is actually playing
+      if (!videoRef.current?.paused && !videoRef.current?.ended) {
+        const currentTime = Date.now();
+        const watchedSeconds = Math.floor((currentTime - lastSaveTime) / 1000);
+        
+        if (watchedSeconds > 0) {
+          accumulatedSeconds += watchedSeconds;
+          lastSaveTime = currentTime;
+          
+          // Save to Firebase every 10 seconds (or accumulate to any threshold you want)
+          if (accumulatedSeconds >= 10) {
+            try {
+              const userRef = doc(db, "users", userId);
+              await setDoc(userRef, {
+                stats: {
+                  totalWatchTimeSeconds: increment(accumulatedSeconds),
+                  ...(isLiveStream ? { liveWatchTimeSeconds: increment(accumulatedSeconds) } : {}),
+                }
+              }, { merge: true });
+
+              const watchHistoryRef = doc(db, "users", userId, "watchHistory", contentId);
+              await setDoc(watchHistoryRef, {
+                contentId: contentId,
+                contentType: isLiveStream ? "live" : "vod",
+                title: contentTitle || "Untitled",
+                thumbnailUrl: thumbnailUrl || "",
+                authorName: authorName || "Unknown",
+                watchedSeconds: increment(accumulatedSeconds),
+                lastWatched: serverTimestamp(),
+                isLive: isLiveStream,
+              }, { merge: true });
+
+              accumulatedSeconds = 0; // Reset after saving
+            } catch (error) {
+              console.error("Error saving watch time:", error);
+            }
+          }
+        }
+      }
+    }, 1000); // Check every 1 second
+
+    // Cleanup: Save any remaining watch time
+    return () => {
+      clearInterval(trackInterval);
+      
+      const finalTime = Date.now();
+      const remainingSeconds = Math.floor((finalTime - lastSaveTime) / 1000) + accumulatedSeconds;
+      
+      // Save even if it's just 1 second
+      if (remainingSeconds > 0) {
+        (async () => {
+          try {
+            const userRef = doc(db, "users", userId);
+            await setDoc(userRef, {
+              stats: {
+                totalWatchTimeSeconds: increment(remainingSeconds),
+                ...(isLiveStream ? { liveWatchTimeSeconds: increment(remainingSeconds) } : {}),
+              }
+            }, { merge: true });
+
+            const watchHistoryRef = doc(db, "users", userId, "watchHistory", contentId);
+            await setDoc(watchHistoryRef, {
+              contentId: contentId,
+              contentType: isLiveStream ? "live" : "vod",
+              title: contentTitle || "Untitled",
+              thumbnailUrl: thumbnailUrl || "",
+              authorName: authorName || "Unknown",
+              watchedSeconds: increment(remainingSeconds),
+              lastWatched: serverTimestamp(),
+              isLive: isLiveStream,
+            }, { merge: true });
+          } catch (error) {
+            console.error("Error saving final watch time:", error);
+          }
+        })();
+      }
+    };
+  }, [userId, contentId, contentTitle, thumbnailUrl, authorName, isLiveStream]);
+  // ========================================================================
+  // END WATCH TIME TRACKING
+  // ========================================================================
+
   useEffect(() => {
     if (videoQualities.length > 0) {
       setCurrentVodQuality(videoQualities[0].label);
@@ -63,7 +167,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     }
   }, [videoQualities, videoUrl]);
 
-  // HLS + ABR Handling
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -107,7 +210,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     };
   }, [activeVideoUrl, autoPlay, muted, isLiveStream, isHlsStream]);
 
-  // Manual HLS quality switch
   const handleHlsQualityChange = (levelIndex: number) => {
     setCurrentLevel(levelIndex);
     if (hlsRef.current) hlsRef.current.currentLevel = levelIndex;
@@ -115,7 +217,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  // Manual VOD quality switch
   const handleVodQualityChange = (quality: VideoQuality) => {
     setCurrentVodQuality(quality.label);
     setActiveVideoUrl(quality.url);
@@ -123,7 +224,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  // Controls fade out
   const handleUserActivity = () => {
     setShowControls(true);
     if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
@@ -142,7 +242,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     };
   }, []);
 
-  // Fullscreen
   const toggleFullscreen = () => {
     const container = videoRef.current?.parentElement;
     if (!container) return;
@@ -154,7 +253,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  // Play/Pause
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -168,7 +266,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
       if (
@@ -189,7 +286,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     return () => playerElement?.removeEventListener("keydown", handleKeydown);
   }, [isPlaying, isMuted, currentTime, duration, isFullscreen, isLiveStream]);
 
-  // Progress/time logic
   const handleProgress = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!videoRef.current) return;
     const value = parseFloat(e.target.value);
@@ -205,7 +301,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  // Volume logic
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
@@ -232,7 +327,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  // Track video metadata, fullscreen, etc.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -258,7 +352,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     };
   }, []);
 
-  // UI helpers
   const formatTime = (t: number) => {
     if (!t || !isFinite(t)) return "0:00";
     const h = Math.floor(t/3600);
@@ -278,7 +371,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     return null;
   };
 
-  // Show quality menu if there are multiple variants
   const hasQualityOptions =
     (isHlsStream && levels.length > 1) || (videoQualities && videoQualities.length > 1);
 
@@ -306,7 +398,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Error message overlay */}
       {hasError && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-30">
           <div className="text-center px-6 text-red-500 font-semibold">
@@ -315,7 +406,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Quality Selector Menu */}
       {hasQualityOptions && showQualityMenu && (
         <div className="absolute bottom-20 right-4 z-30 bg-gray-900/95 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-w-[180px]">
           <div className="px-4 py-2 border-b border-gray-700">
@@ -376,7 +466,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Controls Bar */}
       <div
         className={`absolute bottom-0 left-0 right-0 flex flex-col gap-2 p-4 
           bg-gradient-to-t from-black/80 via-black/50 to-transparent transition-opacity duration-500 z-10
@@ -406,7 +495,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            {/* Play/Pause */}
             <button
               onClick={togglePlay}
               className="p-2 text-white hover:text-emerald-400 transition-colors rounded-lg hover:bg-white/10"
@@ -432,7 +520,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
                 </button>
               </>
             )}
-            {/* Volume */}
             <div className="flex items-center ml-2">
               <button
                 onClick={toggleMute}
@@ -459,7 +546,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
             )}
           </div>
           <div className="flex items-center gap-1">
-            {/* Quality Button */}
             {hasQualityOptions && (
               <button
                 onClick={() => {
@@ -475,7 +561,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
                 <span className="text-xs font-medium">{getCurrentQualityLabel()}</span>
               </button>
             )}
-            {/* Fullscreen */}
             <button
               onClick={toggleFullscreen}
               className="p-2 text-white hover:text-emerald-400 transition-colors rounded-lg hover:bg-white/10"

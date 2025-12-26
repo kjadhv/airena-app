@@ -1,17 +1,25 @@
 // app/context/AuthContext.tsx
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { 
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import {
   onAuthStateChanged,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  User 
+  User,
 } from "firebase/auth";
 import { auth, googleProvider } from "../firebase/config";
 import AuthModal from "../components/AuthModal";
+
+/* ---------------- TYPES ---------------- */
 
 interface AuthContextType {
   user: User | null;
@@ -28,39 +36,70 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
+/* ---------------- CONTEXT ---------------- */
+
 const AuthContext = createContext<AuthContextType | null>(null);
+
+/* ---------------- PROVIDER ---------------- */
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [isBlogAdmin, setIsBlogAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  /* ---------------- AUTH LISTENER ---------------- */
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+
       if (firebaseUser) {
-        // Force token refresh to get updated claims for all roles
+        /* 🔐 FETCH CUSTOM CLAIMS */
         const idTokenResult = await firebaseUser.getIdTokenResult(true);
+
         setIsAdmin(!!idTokenResult.claims.admin);
         setIsCreator(!!idTokenResult.claims.creator);
         setIsBlogAdmin(!!idTokenResult.claims.blogAdmin);
         setIsSuperAdmin(!!idTokenResult.claims.superAdmin);
+
         setIsModalOpen(false);
+
+        /* ✅ SAVE GOOGLE ACCOUNT EMAIL (FOR SWITCH ACCOUNT) */
+        const providerId = firebaseUser.providerData[0]?.providerId;
+
+        if (providerId === "google.com" && firebaseUser.email) {
+          const stored = JSON.parse(
+            localStorage.getItem("airena-google-accounts") || "[]"
+          );
+
+          if (!stored.includes(firebaseUser.email)) {
+            localStorage.setItem(
+              "airena-google-accounts",
+              JSON.stringify([...stored, firebaseUser.email])
+            );
+          }
+        }
       } else {
-        // If no user, reset all roles to false
+        /* RESET ROLES */
         setIsAdmin(false);
         setIsCreator(false);
         setIsBlogAdmin(false);
         setIsSuperAdmin(false);
       }
+
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
+
+  /* ---------------- AUTH ACTIONS ---------------- */
 
   const loginWithGoogle = async () => {
     await signInWithPopup(auth, googleProvider);
@@ -78,18 +117,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await signOut(auth);
   };
 
-  const value = { 
-    user, 
-    loading, 
+  /* ---------------- CONTEXT VALUE ---------------- */
+
+  const value: AuthContextType = {
+    user,
+    loading,
     isAdmin,
     isCreator,
     isBlogAdmin,
     isSuperAdmin,
     isModalOpen,
     setIsModalOpen,
-    loginWithGoogle, 
-    loginWithEmail, 
-    signupWithEmail, 
+    loginWithGoogle,
+    loginWithEmail,
+    signupWithEmail,
     logout,
   };
 
@@ -101,8 +142,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+/* ---------------- HOOK ---------------- */
+
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
   return ctx;
 };

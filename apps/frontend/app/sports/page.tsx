@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense, useMemo } from "react";
 import { PlayCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import { collection, getDocs, query, Timestamp, where } from "firebase/firestore"; // 'where' is imported
+import { collection, getDocs, query, Timestamp, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay, EffectFade } from "swiper/modules";
@@ -11,8 +11,6 @@ import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/effect-fade";
 
-// Assuming these paths are correct relative to the new page location
-// If 'app' is the root, you might need to adjust them to '@/components/...'
 import Footer from "@/app/components/Footer";
 import UserAvatar from "@/app/components/UserAvatar";
 import { db } from "@/app/firebase/config";
@@ -22,7 +20,7 @@ interface Content {
   type: "vod";
   title: string;
   description: string;
-  category: "games" | "sports";
+  category: string;
   createdAt: Date;
   authorName: string;
   authorPhotoURL: string | null;
@@ -32,6 +30,10 @@ interface Content {
   tags: string[];
   duration: number;
 }
+
+// Sports categories based on your CATEGORIES definition
+const SPORTS_TAGS = ["boxing", "karate"];
+const SPORTS_CATEGORY = "sports"; // Add this to check the category field too
 
 const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
   const router = useRouter();
@@ -182,13 +184,11 @@ const VideoCardSkeleton = () => (
   </div>
 );
 
-// Renamed WatchContent to SportsContent for clarity
 const SportsContent = () => {
   const [allContent, setAllContent] = useState<Content[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const { featured, trending, latest } = useMemo(() => {
-    // This logic remains the same, it just operates on the pre-filtered 'allContent'
     const sortedByDate = [...allContent].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const sortedByViews = [...allContent].sort((a, b) => b.views - a.views);
     return {
@@ -199,51 +199,63 @@ const SportsContent = () => {
   }, [allContent]);
 
   useEffect(() => {
-    const fetchSportsContent = async () => {
+    const fetchSportsVideos = async () => {
       setIsLoading(true);
       try {
-        // --- THIS IS THE ONLY CHANGE ---
-        // Added 'where("category", "==", "sports")' to the query
-        const videosQuery = query(
+        // Fetch all public videos
+        const q = query(
           collection(db, "videos"),
-          where("visibility", "==", "public"),
-          where("category", "==", "sports") // <-- Filters for sports only
+          where("visibility", "==", "public")
         );
-        // -----------------------------
 
-        const videosSnapshot = await getDocs(videosQuery);
-        const fetchedVideos = videosSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const createdAtTimestamp = data.createdAt as Timestamp;
-          return {
-            id: doc.id,
-            type: "vod",
-            title: data.title || "Untitled Video",
-            description: data.description || "",
-            category: data.category || "games", // This will be 'sports'
-            createdAt: createdAtTimestamp ? createdAtTimestamp.toDate() : new Date(),
-            authorName: data.authorName || "Unknown",
-            authorPhotoURL: data.authorPhotoURL || null,
-            views: data.views || 0,
-            videoUrl: data.videoUrl || "",
-            thumbnailUrl: data.thumbnailUrl || "",
-            tags: data.tags || [],
-            duration: data.duration || 0,
-          } as Content;
-        });
-        setAllContent(fetchedVideos);
-      } catch (error) {
-        console.error("Failed to fetch sports content:", error);
+        const snapshot = await getDocs(q);
+
+        // Filter videos that have sports tags OR sports category
+        const videos = snapshot.docs
+          .map((doc) => {
+            const d = doc.data();
+            const createdAt = d.createdAt instanceof Timestamp
+              ? d.createdAt.toDate()
+              : new Date();
+
+            return {
+              id: doc.id,
+              type: "vod" as const,
+              category: d.category || "",
+              createdAt,
+              title: d.title || "Untitled",
+              description: d.description || "",
+              authorName: d.authorName || "Unknown",
+              authorPhotoURL: d.authorPhotoURL || null,
+              views: d.views || 0,
+              videoUrl: d.videoUrl || "",
+              thumbnailUrl: d.thumbnailUrl || "",
+              tags: d.tags || [],
+              duration: d.duration || 0,
+            };
+          })
+          .filter((video) => {
+            // Check if video has sports in tags array, OR has specific sport tags, OR has boxing/karate as category
+            const hasSportsTag = video.tags.includes(SPORTS_CATEGORY);
+            const hasSpecificSportTags = video.tags.some((tag: string) => SPORTS_TAGS.includes(tag));
+            const isSportsCategory = SPORTS_TAGS.includes(video.category);
+            
+            return hasSportsTag || hasSpecificSportTags || isSportsCategory;
+          });
+
+        setAllContent(videos);
+      } catch (e) {
+        console.error("Sports fetch failed", e);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchSportsContent();
+
+    fetchSportsVideos();
   }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white flex flex-col">
-      {/* The main padding is preserved from your original code */}
       <main className="flex-grow pt-24 pb-20 transition-all duration-300 px-6 sm:px-10 lg:px-16 lg:ml-20">
         {isLoading ? (
           <>
@@ -260,6 +272,11 @@ const SportsContent = () => {
               </div>
             </div>
           </>
+        ) : allContent.length === 0 ? (
+          <div className="text-center py-20">
+            <h2 className="text-3xl font-bold mb-4">No Sports Videos Yet</h2>
+            <p className="text-gray-400">Check back later for new content!</p>
+          </div>
         ) : (
           <>
             <HeroCarousel featuredContent={featured} />
@@ -273,7 +290,6 @@ const SportsContent = () => {
   );
 };
 
-// Renamed WatchPage to SportsPage
 const SportsPage = () => (
   <Suspense
     fallback={

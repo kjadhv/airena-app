@@ -14,6 +14,9 @@ import "swiper/css/effect-fade";
 import Footer from "@/app/components/Footer";
 import UserAvatar from "@/app/components/UserAvatar";
 import { db } from "@/app/firebase/config";
+import { useSearch } from "@/app/context/SearchContext";
+
+/* ===================== TYPES ===================== */
 
 interface Content {
   id: string;
@@ -30,6 +33,8 @@ interface Content {
   tags: string[];
   duration: number;
 }
+
+/* ===================== HERO ===================== */
 
 const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
   const router = useRouter();
@@ -59,10 +64,10 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
             <div className="absolute bottom-0 left-0 p-6 lg:p-10 z-20">
-              <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-3 drop-shadow-lg">
+              <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-3">
                 {content.title}
               </h2>
-              <p className="text-gray-300 text-lg max-w-2xl line-clamp-2 drop-shadow-lg">
+              <p className="text-gray-300 text-lg max-w-2xl line-clamp-2">
                 {content.description}
               </p>
             </div>
@@ -73,8 +78,9 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
   );
 };
 
+/* ===================== ROW ===================== */
+
 const ContentRow = ({ title, content }: { title: string; content: Content[] }) => {
-  const router = useRouter();
   const swiperId = `swiper-${title.replace(/\s+/g, "-")}`;
   if (!content.length) return null;
 
@@ -83,18 +89,15 @@ const ContentRow = ({ title, content }: { title: string; content: Content[] }) =
       <div className="flex justify-between items-center mb-5 px-1">
         <h3 className="text-2xl font-semibold">{title}</h3>
         <div className="flex gap-2">
-          <button
-            className={`prev-${swiperId} p-2 rounded-full bg-white/10 hover:bg-white/20 transition`}
-          >
+          <button className={`prev-${swiperId} p-2 rounded-full bg-white/10`}>
             <ChevronLeft className="text-white" />
           </button>
-          <button
-            className={`next-${swiperId} p-2 rounded-full bg-white/10 hover:bg-white/20 transition`}
-          >
+          <button className={`next-${swiperId} p-2 rounded-full bg-white/10`}>
             <ChevronRight className="text-white" />
           </button>
         </div>
       </div>
+
       <Swiper
         modules={[Navigation]}
         navigation={{
@@ -103,7 +106,6 @@ const ContentRow = ({ title, content }: { title: string; content: Content[] }) =
         }}
         spaceBetween={16}
         slidesPerView="auto"
-        className="!pb-2"
       >
         {content.map((item) => (
           <SwiperSlide key={item.id} className="!w-[280px] sm:!w-[300px]">
@@ -115,17 +117,15 @@ const ContentRow = ({ title, content }: { title: string; content: Content[] }) =
   );
 };
 
+/* ===================== CARD ===================== */
+
 const VideoCard = ({ content }: { content: Content }) => {
   const router = useRouter();
 
   const formatDuration = (seconds: number) => {
-    if (isNaN(seconds) || seconds < 0) return "00:00";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
+    const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
-    return [h > 0 ? h : null, h > 0 && m < 10 ? "0" + m : m, s < 10 ? "0" + s : s]
-      .filter(Boolean)
-      .join(":");
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
   return (
@@ -133,120 +133,102 @@ const VideoCard = ({ content }: { content: Content }) => {
       onClick={() => router.push(`/watch/player?v=${content.id}`)}
       className="block group text-left"
     >
-      <div className="flex flex-col">
-        <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800 border border-transparent group-hover:border-emerald-500/60 transition-all duration-300">
-          <img
-            src={content.thumbnailUrl || "/placeholder-image.png"}
-            alt={content.title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-          {content.duration > 0 && (
-            <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs rounded-md font-semibold">
-              {formatDuration(content.duration)}
-            </div>
-          )}
-          <PlayCircle className="absolute inset-0 m-auto w-12 h-12 text-white/40 group-hover:text-white transition duration-300 opacity-0 group-hover:opacity-100" />
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800">
+        <img src={content.thumbnailUrl} alt={content.title} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs rounded">
+          {formatDuration(content.duration)}
         </div>
+        <PlayCircle className="absolute inset-0 m-auto w-12 h-12 text-white/40 group-hover:text-white opacity-0 group-hover:opacity-100" />
+      </div>
 
-        <div className="flex items-start gap-3 mt-3">
-          <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
-          <div className="flex-1">
-            <h3 className="font-semibold text-white line-clamp-2 leading-tight">{content.title}</h3>
-            <p className="text-sm text-gray-400">{content.authorName}</p>
-            <p className="text-xs text-gray-500">
-              {content.views?.toLocaleString() || 0} views •{" "}
-              {content.createdAt.toLocaleDateString()}
-            </p>
-          </div>
+      <div className="flex items-start gap-3 mt-3">
+        <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
+        <div>
+          <h3 className="font-semibold text-white line-clamp-2">{content.title}</h3>
+          <p className="text-sm text-gray-400">{content.authorName}</p>
         </div>
       </div>
     </button>
   );
 };
 
-const VideoCardSkeleton = () => (
-  <div className="w-[280px] sm:w-[300px] shrink-0">
-    <div className="flex flex-col animate-pulse">
-      <div className="aspect-video bg-gray-700/50 rounded-xl"></div>
-      <div className="flex items-start gap-4 mt-3">
-        <div className="w-10 h-10 rounded-full bg-gray-700/50"></div>
-        <div className="flex-1 space-y-2">
-          <div className="h-4 bg-gray-700/50 rounded w-3/4"></div>
-          <div className="h-3 bg-gray-700/50 rounded w-1/2"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+/* ===================== MAIN ===================== */
 
 const WatchContent = () => {
+  const { search } = useSearch(); // ✅ GLOBAL SEARCH
   const [allContent, setAllContent] = useState<Content[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { featured, trending, latest } = useMemo(() => {
-    const sortedByDate = [...allContent].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    const sortedByViews = [...allContent].sort((a, b) => b.views - a.views);
-    return {
-      featured: sortedByViews.slice(0, 5),
-      trending: sortedByViews.slice(0, 10),
-      latest: sortedByDate.slice(0, 10),
-    };
-  }, [allContent]);
+  /* 🔥 FILTER BY SEARCH (CATEGORY + TAG + TITLE) */
+  const filteredContent = useMemo(() => {
+    if (!search) return allContent;
 
+    return allContent.filter(
+      (v) =>
+        v.title.toLowerCase().includes(search) ||
+        v.category.toLowerCase() === search ||
+        v.tags?.some((t) => t.toLowerCase().includes(search))
+    );
+  }, [search, allContent]);
+
+  /* 🔥 SORTED SECTIONS */
+  const { featured, trending, latest } = useMemo(() => {
+    const byViews = [...filteredContent].sort((a, b) => b.views - a.views);
+    const byDate = [...filteredContent].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+
+    return {
+      featured: byViews.slice(0, 5),
+      trending: byViews.slice(0, 10),
+      latest: byDate.slice(0, 10),
+    };
+  }, [filteredContent]);
+
+  /* 🔥 FETCH ONCE */
   useEffect(() => {
-    const fetchAllContent = async () => {
-      setIsLoading(true);
-      try {
-        const videosQuery = query(collection(db, "videos"), where("visibility", "==", "public"));
-        const videosSnapshot = await getDocs(videosQuery);
-        const fetchedVideos = videosSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const createdAtTimestamp = data.createdAt as Timestamp;
+    const fetchVideos = async () => {
+      const snap = await getDocs(
+        query(collection(db, "videos"), where("visibility", "==", "public"))
+      );
+
+      setAllContent(
+        snap.docs.map((d) => {
+          const data = d.data();
           return {
-            id: doc.id,
+            id: d.id,
             type: "vod",
-            title: data.title || "Untitled Video",
-            description: data.description || "",
-            category: data.category || "games",
-            createdAt: createdAtTimestamp ? createdAtTimestamp.toDate() : new Date(),
-            authorName: data.authorName || "Unknown",
-            authorPhotoURL: data.authorPhotoURL || null,
+            title: data.title,
+            description: data.description,
+            category: data.category,
+            createdAt: (data.createdAt as Timestamp).toDate(),
+            authorName: data.authorName,
+            authorPhotoURL: data.authorPhotoURL,
             views: data.views || 0,
-            videoUrl: data.videoUrl || "",
-            thumbnailUrl: data.thumbnailUrl || "",
+            videoUrl: data.videoUrl,
+            thumbnailUrl: data.thumbnailUrl,
             tags: data.tags || [],
             duration: data.duration || 0,
-          } as Content;
-        });
-        setAllContent(fetchedVideos);
-      } catch (error) {
-        console.error("Failed to fetch content:", error);
-      } finally {
-        setIsLoading(false);
-      }
+          };
+        })
+      );
+
+      setIsLoading(false);
     };
-    fetchAllContent();
+
+    fetchVideos();
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white flex flex-col">
-      <main className="flex-grow pt-24 pb-20 transition-all duration-300 px-6 sm:px-10 lg:px-16 lg:ml-20"> {/* <-- CHANGE APPLIED HERE */}
+    <div className="min-h-screen bg-black text-white">
+      <main className="pt-24 px-6 lg:px-16 lg:ml-20">
         {isLoading ? (
-          <>
-            <div className="h-[45vh] lg:h-[60vh] bg-gray-800/40 rounded-2xl animate-pulse mb-12" />
-            <div className="space-y-12">
-              <div>
-                <div className="h-7 bg-gray-800/50 rounded w-1/4 mb-4"></div>
-                <div className="flex gap-5">
-                  <VideoCardSkeleton />
-                  <VideoCardSkeleton />
-                  <VideoCardSkeleton />
-                  <VideoCardSkeleton />
-                </div>
-              </div>
-            </div>
-          </>
+          <p>Loading...</p>
+        ) : filteredContent.length === 0 && search ? (
+          <p className="text-gray-400 text-center mt-20">
+            No videos found for "{search}"
+          </p>
         ) : (
           <>
             <HeroCarousel featuredContent={featured} />
@@ -255,19 +237,16 @@ const WatchContent = () => {
           </>
         )}
       </main>
+
       <Footer />
     </div>
   );
 };
 
+/* ===================== PAGE ===================== */
+
 const WatchPage = () => (
-  <Suspense
-    fallback={
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Loading...
-      </div>
-    }
-  >
+  <Suspense fallback={<div className="text-white">Loading...</div>}>
     <WatchContent />
   </Suspense>
 );

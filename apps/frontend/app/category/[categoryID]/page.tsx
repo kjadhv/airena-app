@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, Suspense, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { PlayCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import { collection, getDocs, query, Timestamp, where } from "firebase/firestore";
-import { useRouter } from "next/navigation";
+import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
+import { useRouter, useParams } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay, EffectFade } from "swiper/modules";
 
@@ -14,7 +14,7 @@ import "swiper/css/effect-fade";
 import Footer from "@/app/components/Footer";
 import UserAvatar from "@/app/components/UserAvatar";
 import { db } from "@/app/firebase/config";
-
+export const dynamic = 'force-dynamic';
 interface Content {
   id: string;
   type: "vod";
@@ -31,9 +31,51 @@ interface Content {
   duration: number;
 }
 
-// Games categories based on your CATEGORIES definition
-const GAMES_TAGS = ["bgmi", "valorant", "chess", "ludo", "grand_theft", "call-of-duty"];
-const GAMES_CATEGORY = "games"; // Add this to check the category field too
+// Category definitions - matches your TrendingCategoriesSection
+const CATEGORIES = {
+  boxing: {
+    name: "Boxing",
+    gradient: "from-red-700/80 to-orange-700/80",
+  },
+  karate: {
+    name: "Karate",
+    gradient: "from-amber-700/80 to-yellow-700/80",
+  },
+  bgmi: {
+    name: "BGMI",
+    gradient: "from-orange-600/80 to-red-600/80",
+  },
+  valorant: {
+    name: "Valorant",
+    gradient: "from-red-600/80 to-pink-600/80",
+  },
+  chess: {
+    name: "Chess",
+    gradient: "from-slate-700/80 to-gray-700/80",
+  },
+  ludo: {
+    name: "Ludo",
+    gradient: "from-green-600/80 to-teal-600/80",
+  },
+  grand_theft: {
+    name: "Grand Theft Auto",
+    gradient: "from-green-600/80 to-emerald-600/80",
+  },
+  "call-of-duty": {
+    name: "Call of Duty",
+    gradient: "from-orange-600/80 to-red-700/80",
+  },
+  music: {
+    name: "Music",
+    gradient: "from-pink-600/80 to-rose-600/80",
+  },
+  podcast: {
+    name: "Podcast",
+    gradient: "from-purple-600/80 to-indigo-600/80",
+  },
+};
+
+
 
 const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
   const router = useRouter();
@@ -78,7 +120,6 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
 };
 
 const ContentRow = ({ title, content }: { title: string; content: Content[] }) => {
-  const router = useRouter();
   const swiperId = `swiper-${title.replace(/\s+/g, "-")}`;
   if (!content.length) return null;
 
@@ -87,14 +128,10 @@ const ContentRow = ({ title, content }: { title: string; content: Content[] }) =
       <div className="flex justify-between items-center mb-5 px-1">
         <h3 className="text-2xl font-semibold">{title}</h3>
         <div className="flex gap-2">
-          <button
-            className={`prev-${swiperId} p-2 rounded-full bg-white/10 hover:bg-white/20 transition`}
-          >
+          <button className={`prev-${swiperId} p-2 rounded-full bg-white/10 hover:bg-white/20 transition`}>
             <ChevronLeft className="text-white" />
           </button>
-          <button
-            className={`next-${swiperId} p-2 rounded-full bg-white/10 hover:bg-white/20 transition`}
-          >
+          <button className={`next-${swiperId} p-2 rounded-full bg-white/10 hover:bg-white/20 transition`}>
             <ChevronRight className="text-white" />
           </button>
         </div>
@@ -152,15 +189,13 @@ const VideoCard = ({ content }: { content: Content }) => {
           )}
           <PlayCircle className="absolute inset-0 m-auto w-12 h-12 text-white/40 group-hover:text-white transition duration-300 opacity-0 group-hover:opacity-100" />
         </div>
-
         <div className="flex items-start gap-3 mt-3">
           <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
           <div className="flex-1">
             <h3 className="font-semibold text-white line-clamp-2 leading-tight">{content.title}</h3>
             <p className="text-sm text-gray-400">{content.authorName}</p>
             <p className="text-xs text-gray-500">
-              {content.views?.toLocaleString() || 0} views •{" "}
-              {content.createdAt.toLocaleDateString()}
+              {content.views?.toLocaleString() || 0} views • {content.createdAt.toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -184,76 +219,89 @@ const VideoCardSkeleton = () => (
   </div>
 );
 
-const GamesContent = () => {
-  const [allContent, setAllContent] = useState<Content[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const CategoryPageContent = () => {
+  const params = useParams();
+  const categoryId = params.categoryID as string;
+  const [videos, setVideos] = useState<Content[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const categoryInfo = CATEGORIES[categoryId as keyof typeof CATEGORIES];
 
   const { featured, trending, latest } = useMemo(() => {
-    const sortedByDate = [...allContent].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    const sortedByViews = [...allContent].sort((a, b) => b.views - a.views);
+    const byViews = [...videos].sort((a, b) => b.views - a.views);
+    const byDate = [...videos].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
     return {
-      featured: sortedByViews.slice(0, 5),
-      trending: sortedByViews.slice(0, 10),
-      latest: sortedByDate.slice(0, 10),
+      featured: byViews.slice(0, 5),
+      trending: byViews.slice(0, 10),
+      latest: byDate.slice(0, 10),
     };
-  }, [allContent]);
+  }, [videos]);
 
   useEffect(() => {
-    const fetchGamesContent = async () => {
-      setIsLoading(true);
+    const fetchCategoryVideos = async () => {
+      // if (!categoryInfo) {
+      //   setLoading(false);
+      //   return;
+      // }
+
+      setLoading(true);
       try {
-        // Fetch all public videos
-        const videosQuery = query(
+        // Query videos where category matches the categoryId
+        const q = query(
           collection(db, "videos"),
-          where("visibility", "==", "public")
+          where("visibility", "==", "public"),
+          where("category", "==", categoryId)
         );
+        
+        const snapshot = await getDocs(q);
 
-        const videosSnapshot = await getDocs(videosQuery);
+        const filteredVideos = snapshot.docs.map((doc) => {
+          const d = doc.data();
+          const createdAtTimestamp = d.createdAt as Timestamp;
+          return {
+            id: doc.id,
+            type: "vod",
+            title: d.title || "Untitled",
+            description: d.description || "",
+            category: d.category || "",
+            createdAt: createdAtTimestamp ? createdAtTimestamp.toDate() : new Date(),
+            authorName: d.authorName || "Unknown",
+            authorPhotoURL: d.authorPhotoURL || null,
+            views: d.views || 0,
+            videoUrl: d.videoUrl || "",
+            thumbnailUrl: d.thumbnailUrl || "",
+            tags: d.tags || [],
+            duration: d.duration || 0,
+          } as Content;
+        });
 
-        // Filter videos that have games tags OR games category
-        const fetchedVideos = videosSnapshot.docs
-          .map((doc) => {
-            const data = doc.data();
-            const createdAtTimestamp = data.createdAt as Timestamp;
-            return {
-              id: doc.id,
-              type: "vod" as const,
-              title: data.title || "Untitled Video",
-              description: data.description || "",
-              category: data.category || "",
-              createdAt: createdAtTimestamp ? createdAtTimestamp.toDate() : new Date(),
-              authorName: data.authorName || "Unknown",
-              authorPhotoURL: data.authorPhotoURL || null,
-              views: data.views || 0,
-              videoUrl: data.videoUrl || "",
-              thumbnailUrl: data.thumbnailUrl || "",
-              tags: data.tags || [],
-              duration: data.duration || 0,
-            };
-          })
-          .filter((video) => {
-            // Check if video has games in tags array, OR has specific game tags, OR has game name as category
-            const hasGamesTag = video.tags.includes(GAMES_CATEGORY);
-            const hasSpecificGameTags = video.tags.some((tag: string) => GAMES_TAGS.includes(tag));
-            const isGamesCategory = GAMES_TAGS.includes(video.category);
-            
-            return hasGamesTag || hasSpecificGameTags || isGamesCategory;
-          });
-
-        setAllContent(fetchedVideos);
-      } catch (error) {
-        console.error("Failed to fetch games content:", error);
+        setVideos(filteredVideos);
+      } catch (err) {
+        console.error("Failed to fetch category videos", err);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-    fetchGamesContent();
-  }, []);
+
+    fetchCategoryVideos();
+  }, [categoryId, categoryInfo]);
+
+  // if (!categoryInfo) {
+  //   return (
+  //     <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white flex items-center justify-center">
+  //       <div className="text-center">
+  //         <h1 className="text-4xl font-bold mb-4">Category Not Found</h1>
+  //         <p className="text-gray-400">The category you're looking for doesn't exist.</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white flex flex-col">
       <main className="flex-grow pt-24 pb-20 transition-all duration-300 px-6 sm:px-10 lg:px-16 lg:ml-20">
-        {isLoading ? (
+        {loading ? (
           <>
             <div className="h-[45vh] lg:h-[60vh] bg-gray-800/40 rounded-2xl animate-pulse mb-12" />
             <div className="space-y-12">
@@ -268,16 +316,23 @@ const GamesContent = () => {
               </div>
             </div>
           </>
-        ) : allContent.length === 0 ? (
+        ) : videos.length === 0 ? (
           <div className="text-center py-20">
-            <h2 className="text-3xl font-bold mb-4">No Games Videos Yet</h2>
+            <h2 className="text-3xl font-bold mb-4">No videos found in {categoryInfo?.name || categoryId}</h2>
             <p className="text-gray-400">Check back later for new content!</p>
           </div>
         ) : (
           <>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold mb-2 capitalize">{categoryId}</h1>
+              <p className="text-gray-400">{videos.length} videos</p>
+            </div>
             <HeroCarousel featuredContent={featured} />
-            <ContentRow title="Trending in Games" content={trending} />
-            <ContentRow title="Latest Games Uploads" content={latest} />
+            <ContentRow
+  title={`Trending in ${categoryInfo?.name || categoryId}`}
+  content={trending}
+/>
+            <ContentRow title="Latest Uploads" content={latest} />
           </>
         )}
       </main>
@@ -286,16 +341,4 @@ const GamesContent = () => {
   );
 };
 
-const GamesPage = () => (
-  <Suspense
-    fallback={
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        Loading Games...
-      </div>
-    }
-  >
-    <GamesContent />
-  </Suspense>
-);
-
-export default GamesPage;
+export default CategoryPageContent;

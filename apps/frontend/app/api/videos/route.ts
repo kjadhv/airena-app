@@ -17,19 +17,17 @@ export async function POST(req: NextRequest) {
 
         const { 
             title, description, category, videoUrl, 
-            thumbnailUrl, tags, visibility, audience 
+            thumbnailUrl, tags, visibility 
         } = await req.json();
 
         // --- Enhanced Validation ---
-        const requiredFields = { title, description, category, videoUrl, thumbnailUrl, visibility, audience };
+        const requiredFields = { title, description, category, videoUrl, thumbnailUrl, visibility};
         for (const [key, value] of Object.entries(requiredFields)) {
             if (!value) {
                 return NextResponse.json({ error: `Missing required field: ${key}` }, { status: 400 });
             }
         }
-         if (!Array.isArray(tags)) {
-            return NextResponse.json({ error: 'Tags must be an array' }, { status: 400 });
-        }
+        const normalizedTags = Array.isArray(tags) ? tags : [tags];
         
         const videoData = {
             title,
@@ -37,20 +35,16 @@ export async function POST(req: NextRequest) {
             category,
             videoUrl,
             thumbnailUrl, // <-- New
-            tags,         // <-- New
+            tags: normalizedTags, // <-- New
             visibility,   // <-- New
-            audience,     // <-- New
             authorId: decodedToken.uid,
             authorName: decodedToken.name || 'Anonymous',
             authorPhotoURL: decodedToken.picture || null,
             createdAt: Timestamp.now(),
             views: 0,
-        };
-        
+        };        
         await db.collection('videos').add(videoData);
-
         return NextResponse.json({ message: 'Video entry created successfully' }, { status: 201 });
-
     } catch (error: unknown) {
         console.error('API Error creating video entry:', error);
         // Provide more specific error feedback for token issues

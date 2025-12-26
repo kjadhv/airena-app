@@ -26,9 +26,13 @@ import {
   onSnapshot,
   setDoc,
   serverTimestamp,
+  collection,
+  getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 
-// --- HELPER COMPONENT DEFINITIONS (MOVED TO TOP) ---
+// --- HELPER COMPONENT DEFINITIONS ---
 
 interface StatCardProps { icon: React.ReactNode; label: string; value: string; }
 function StatCard({ icon, label, value }: StatCardProps): JSX.Element {
@@ -78,7 +82,6 @@ function TabContent({ activeTab }: TabContentProps): JSX.Element | null {
   return null;
 }
 
-
 // --- MAIN PROFILE PAGE COMPONENT ---
 
 interface UserProfile {
@@ -92,8 +95,8 @@ interface UserProfile {
 }
 
 interface UserStats {
-  watchTime: number;
-  streamsWatched: number;
+  watchTime: number; // Total seconds watching videos
+  videosUploaded: number; // Videos uploaded by THIS user
   followedCreators: number;
   joinDate: string;
 }
@@ -114,6 +117,7 @@ export default function ProfilePage(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(true);
   const [newBio, setNewBio] = useState<string>("");
 
+  // Fetch real stats from Firebase
   useEffect(() => {
     if (authUser) {
       const userRef = doc(db, "users", authUser.uid);
@@ -130,7 +134,26 @@ export default function ProfilePage(): JSX.Element {
             bio: data.bio || "Welcome to my profile!",
           });
           setNewBio(data.bio || "");
+
+          // Get watch time in SECONDS from Firebase
+          const totalWatchTimeSeconds = data.stats?.totalWatchTimeSeconds || 0;
+
+          // ✅ NEW: Count videos UPLOADED by this user
+          const videosQuery = query(
+            collection(db, "videos"),
+            where("authorId", "==", authUser.uid)
+          );
+          const videosSnapshot = await getDocs(videosQuery);
+          const videosUploaded = videosSnapshot.size;
+
+          setStats({
+            watchTime: totalWatchTimeSeconds,
+            videosUploaded: videosUploaded, // Changed from streamsWatched
+            followedCreators: 0, // TODO: Implement later
+            joinDate: authUser.metadata.creationTime || new Date().toISOString(),
+          });
         } else {
+          // Create user document if doesn't exist
           await setDoc(userRef, {
             uid: authUser.uid,
             displayName: authUser.displayName || "Unnamed User",
@@ -140,14 +163,18 @@ export default function ProfilePage(): JSX.Element {
             isAdmin: false,
             bio: "Welcome to my profile!",
             createdAt: serverTimestamp(),
+            stats: {
+              totalWatchTimeSeconds: 0,
+            }
+          });
+          
+          setStats({
+            watchTime: 0,
+            videosUploaded: 0,
+            followedCreators: 0,
+            joinDate: authUser.metadata.creationTime || new Date().toISOString(),
           });
         }
-        setStats({
-          watchTime: 0,
-          streamsWatched: 0,
-          followedCreators: 0,
-          joinDate: authUser.metadata.creationTime || new Date().toISOString(),
-        });
         setLoading(false);
       });
       return () => unsubscribe();
@@ -168,7 +195,21 @@ export default function ProfilePage(): JSX.Element {
     }
   };
 
-  const formatWatchTime = (minutes: number): string => `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  // Smart format function that shows seconds when needed
+  const formatWatchTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
   const formatJoinDate = (dateString: string): string => new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "long" });
 
   if (loading || authLoading) {
@@ -192,7 +233,11 @@ export default function ProfilePage(): JSX.Element {
       <div className="border-b border-gray-900 bg-gradient-to-r from-gray-950 via-emerald-950/10 to-gray-950">
         <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
           <h1 className="text-lg font-medium text-white tracking-tight">Profile</h1>
-          <button className="p-2 hover:bg-gray-900 rounded-lg transition-all"><Settings className="w-5 h-5 text-gray-400" /></button>
+         <Link href="/settings">
+  <button className="p-2 hover:bg-gray-900 rounded-lg transition-all">
+    <Settings className="w-5 h-5 text-gray-400" />
+  </button>
+</Link>
         </div>
       </div>
 
@@ -236,7 +281,7 @@ export default function ProfilePage(): JSX.Element {
 
         {stats && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
             <StatCard icon={<Video />} label="Watch Time" value={formatWatchTime(stats.watchTime)} />
-            <StatCard icon={<Award />} label="Streams" value={stats.streamsWatched.toString()} />
+            <StatCard icon={<Award />} label="Videos Uploaded" value={stats.videosUploaded.toString()} />
             <StatCard icon={<User />} label="Following" value={stats.followedCreators.toString()} />
             <StatCard icon={<Calendar />} label="Joined" value={formatJoinDate(stats.joinDate)} />
           </div>

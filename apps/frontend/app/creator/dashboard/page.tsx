@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
-import Header from "@/app/components/Sidebar"; // keep as original project import
+import Header from "@/app/components/Sidebar";
 import Footer from "@/app/components/Footer";
 import Link from "next/link";
 import Image from "next/image";
@@ -29,6 +29,7 @@ import {
   MoreVertical,
   Crown,
   Settings,
+  Lock,
 } from "lucide-react";
 import AppImage from "@/app/components/AppImage";
 import { Dialog, Transition } from "@headlessui/react";
@@ -46,14 +47,14 @@ interface Video {
   id: string;
   title: string;
   description: string;
-  category?: "games" | "sports" | string;
   tags?: string[];
   visibility?: "public" | "private";
-  createdAt: string; // ISO string in state
+  createdAt: string;
   views: number;
   videoUrl?: string;
   thumbnailUrl?: string;
 }
+
 interface Channel {
   channelName: string;
   photoURL: string | null;
@@ -63,7 +64,7 @@ interface Channel {
 }
 
 const CreatorDashboardPage: React.FC = () => {
-  const { user, loading, isCreator } = useAuth();
+  const { user, loading, isCreator, setIsModalOpen } = useAuth();
   const router = useRouter();
   const [videos, setVideos] = useState<Video[]>([]);
   const [channel, setChannel] = useState<Channel | null>(null);
@@ -75,8 +76,15 @@ const CreatorDashboardPage: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
 
+  // Automatically open auth modal if user is not signed in
   useEffect(() => {
-    if (!loading && !isCreator) {
+    if (!loading && !user) {
+      setIsModalOpen(true);
+    }
+  }, [loading, user, setIsModalOpen]);
+
+  useEffect(() => {
+    if (!loading && user && !isCreator) {
       router.replace("/");
       return;
     }
@@ -101,7 +109,6 @@ const CreatorDashboardPage: React.FC = () => {
           const querySnapshot = await getDocs(q);
           const videosData: Video[] = querySnapshot.docs.map((d) => {
             const data = d.data() as DocumentData;
-            // createdAt may be a Firestore Timestamp or number/string
             let createdAtISO = new Date().toISOString();
             if (data.createdAt instanceof Timestamp) createdAtISO = data.createdAt.toDate().toISOString();
             else if (typeof data.createdAt === "number") createdAtISO = new Date(data.createdAt).toISOString();
@@ -111,7 +118,6 @@ const CreatorDashboardPage: React.FC = () => {
               id: d.id,
               title: data.title || "Untitled",
               description: data.description || "",
-              category: data.category,
               tags: data.tags || [],
               visibility: data.visibility || "private",
               createdAt: createdAtISO,
@@ -131,6 +137,33 @@ const CreatorDashboardPage: React.FC = () => {
       })();
     }
   }, [user, loading, isCreator, router]);
+
+  // Show login prompt if user is not signed in
+  if (!loading && !user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center shadow-2xl">
+          <div className="mb-6 flex justify-center">
+            <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center">
+              <Lock className="text-emerald-400" size={40} />
+            </div>
+          </div>
+          
+          <h1 className="text-3xl font-bold text-white mb-3">
+            Creator Access Required
+          </h1>
+          
+          <p className="text-gray-400 mb-4 text-lg">
+            Please login or sign up first to become a creator and access the dashboard.
+          </p>
+          
+          <p className="text-gray-500 text-sm">
+            The login modal should appear automatically. If it doesn't, please refresh the page.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || isLoadingContent || !isCreator) {
     return (
@@ -390,7 +423,7 @@ const EditVideoModal: React.FC<{
   const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === "," || e.key === "Enter") && tagInputRef.current?.value.trim()) {
       e.preventDefault();
-      const newTag = tagInputRef.current.value.trim();
+      const newTag = tagInputRef.current.value.trim().toLowerCase();
       if (newTag && !(formData.tags ?? []).includes(newTag)) {
         setFormData((prev) => ({ ...prev, tags: [...(prev.tags ?? []), newTag] }));
       }
@@ -411,20 +444,17 @@ const EditVideoModal: React.FC<{
 
       if (newThumbnailFile) {
         const storage = getStorage();
-        // upload to a sensible path; use user.uid and timestamp to avoid collisions
         const path = `thumbnails/${user.uid}/${Date.now()}_${newThumbnailFile.name}`;
         const ref = storageRef(storage, path);
         const uploadResult = await uploadBytes(ref, newThumbnailFile);
         const downloadURL = await getDownloadURL(uploadResult.ref);
         updatedData.thumbnailUrl = downloadURL;
 
-        // try deleting old thumb if it exists. deleteObject works with refs created from the download URL too.
         if (video.thumbnailUrl) {
           try {
             const oldRef = storageRef(storage, video.thumbnailUrl);
             await deleteObject(oldRef).catch(() => {});
           } catch (e) {
-            // ignore - deleting by URL may fail depending on how thumbnailUrl was stored
             console.warn("Could not delete old thumbnail (ignored)", e);
           }
         }
@@ -503,7 +533,7 @@ const EditVideoModal: React.FC<{
 
                   <div>
                     <label htmlFor="edit-tags" className="text-sm font-medium text-gray-400 block mb-2">
-                      Tags
+                      Tags (lowercase, e.g., valorant, bgmi, chess)
                     </label>
                     <div className="flex flex-wrap gap-2 p-3 bg-gray-800 border border-gray-700 rounded-lg min-h-[44px]">
                       {(formData.tags ?? []).map((tag) => (
@@ -516,6 +546,9 @@ const EditVideoModal: React.FC<{
                       ))}
                       <input ref={tagInputRef} type="text" placeholder="Add tag & press Enter" onKeyDown={handleTagInputKeyDown} className="flex-1 bg-transparent outline-none px-2 py-1 text-sm text-white placeholder-gray-500 min-w-[150px]" />
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Tags help categorize your video. Use: boxing, karate, bgmi, valorant, chess, ludo, gta, call of duty, music, podcast
+                    </p>
                   </div>
 
                   <div>

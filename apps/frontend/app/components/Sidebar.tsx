@@ -9,6 +9,7 @@ import {
   Newspaper,
   Dumbbell,
   Gamepad2,
+  LayoutDashboard,
   LogIn,
   LogOut,
   UserCircle,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 
 type SidebarItemProps = {
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; // ✅ Fixed type
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   text: string;
   href: string;
   isExpanded: boolean;
@@ -134,6 +135,7 @@ export default function Sidebar() {
     { icon: Newspaper, text: "Blogs", href: "/blogs" },
     { icon: Dumbbell, text: "Sports", href: "/sports" },
     { icon: Gamepad2, text: "Games", href: "/games" },
+    { icon: LayoutDashboard, text: "Dashboard", href: "/creator/dashboard" },
   ];
 
   return (
