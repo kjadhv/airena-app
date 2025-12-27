@@ -11,6 +11,7 @@ import { LanguageProvider } from "@/app/context/LanguageContext";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import AuthModal from "./components/AuthModal";
+import GlobalTimeTracker from "./components/GlobalTimeTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,7 +23,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // mouse glow effect (this is fine)
+  // Mouse glow effect (unchanged)
   useEffect(() => {
     const isDesktop = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     if (isDesktop) {
@@ -38,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <head>
-        {/* 🔥 APPLY THEME BEFORE HYDRATION - FIXED */}
+        {/* Apply theme before hydration */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -49,7 +50,7 @@ export default function RootLayout({
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");  
+      document.documentElement.classList.add("light");
     }
   } catch (_) {}
 })();
@@ -59,6 +60,9 @@ export default function RootLayout({
       </head>
 
       <body className="bg-white text-black dark:bg-black dark:text-slate-100 antialiased">
+        {/* 🔥 GLOBAL TIME TRACKER */}
+        <GlobalTimeTracker />
+
         <AuthProvider>
           <LanguageProvider>
             <SearchProvider>

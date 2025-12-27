@@ -12,7 +12,7 @@ const FoundersClubSection = () => (
       </h2>
 
       <p className="text-gray-400 my-4">
-        Get notified about upcoming events, live streams, and newly uploaded videos —
+        Get your daily dose of sports and gaming news —
         straight to your inbox.
       </p>
 
