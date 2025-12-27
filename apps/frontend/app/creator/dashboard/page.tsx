@@ -158,7 +158,7 @@ const CreatorDashboardPage: React.FC = () => {
           </p>
           
           <p className="text-gray-500 text-sm">
-            The login modal should appear automatically. If it doesn't, please refresh the page.
+            The login modal should appear automatically. If it doesn&apos;t, please refresh the page.
           </p>
         </div>
       </div>

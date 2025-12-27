@@ -1,9 +1,11 @@
 "use client";
+
 import { useEffect } from "react";
+
 export default function GlobalTimeTracker() {
   useEffect(() => {
     let start = Date.now();
-    let interval: NodeJS.Timeout;
+    let interval: number;
 
     const saveTime = () => {
       const now = Date.now();
@@ -20,11 +22,14 @@ export default function GlobalTimeTracker() {
       start = now;
     };
 
-    interval = setInterval(saveTime, 10000);
+    interval = window.setInterval(saveTime, 10000);
 
     const handleVisibility = () => {
-      if (document.hidden) saveTime();
-      else start = Date.now();
+      if (document.hidden) {
+        saveTime();
+      } else {
+        start = Date.now();
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibility);

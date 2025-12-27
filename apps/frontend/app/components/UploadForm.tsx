@@ -158,10 +158,21 @@ const UploadForm = () => {
             setUploadStatus('Upload complete!');
             setTimeout(() => router.push('/watch'), 1000);
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Submission failed:", err);
-            const errorMessage = err.message || 'Unknown error';
             
+            // Safely extract error message
+            let errorMessage = 'An unexpected error occurred';
+            
+            if (err instanceof Error) {
+                errorMessage = err.message;
+            } else if (typeof err === 'string') {
+                errorMessage = err;
+            } else if (err && typeof err === 'object' && 'message' in err) {
+                errorMessage = String(err.message);
+            }
+            
+            // Check for specific error types
             if (errorMessage.includes('storage/unauthorized') || errorMessage.includes('auth/')) {
                 setError('Authentication error. Please log out and log back in.');
             } else if (errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
