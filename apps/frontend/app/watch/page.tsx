@@ -6,7 +6,7 @@ import { collection, getDocs, query, Timestamp, where } from "firebase/firestore
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay, EffectFade } from "swiper/modules";
-
+import Image from "next/image";
 import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/effect-fade";
@@ -58,11 +58,13 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
             className="cursor-pointer group"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
-            <img
-              src={content.thumbnailUrl}
-              alt={content.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
+            <Image
+  src={content.thumbnailUrl}
+  alt={content.title}
+  fill
+  sizes="100vw"
+  className="object-cover group-hover:scale-105 transition-transform duration-500"
+/>
             <div className="absolute bottom-0 left-0 p-6 lg:p-10 z-20">
               <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-3">
                 {content.title}
@@ -134,7 +136,13 @@ const VideoCard = ({ content }: { content: Content }) => {
       className="block group text-left"
     >
       <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800">
-        <img src={content.thumbnailUrl} alt={content.title} className="w-full h-full object-cover" />
+        <Image
+  src={content.thumbnailUrl}
+  alt={content.title}
+  fill
+  sizes="300px"
+  className="object-cover"
+/>
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs rounded">
           {formatDuration(content.duration)}
@@ -227,7 +235,7 @@ const WatchContent = () => {
           <p>Loading...</p>
         ) : filteredContent.length === 0 && search ? (
           <p className="text-gray-400 text-center mt-20">
-            No videos found for "{search}"
+            {`No videos found for "${search}"`}
           </p>
         ) : (
           <>
