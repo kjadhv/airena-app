@@ -258,5 +258,6 @@ const WatchPage = () => (
     <WatchContent />
   </Suspense>
 );
+export const dynamic = "force-dynamic";
 
 export default WatchPage;
