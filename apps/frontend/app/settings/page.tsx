@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import SwitchAccountModal from "@/app/components/SwitchAccountModal";
 import NotificationsModal from "@/app/components/NotificationsModal";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { useT } from "@/app/hooks/useT";
 import DataModal from "@/app/components/settings/DataModel";
 
@@ -12,7 +12,7 @@ import { ChevronRight, X, Sun, Moon } from "lucide-react";
 /* ================= SETTINGS PAGE ================= */
 
 export default function SettingsPage() {
-  const router = useRouter();
+  // const router = useRouter();
   const t = useT();
 
   const [activeModal, setActiveModal] = useState<
