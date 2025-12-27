@@ -12,12 +12,28 @@ if (!getApps().length) {
       throw new Error("Firebase service account key is missing");
     }
     
+    // Trim and remove potential outer quotes
+    let cleanedKey = serviceAccountKey.trim();
+    
+    // Remove surrounding quotes if present
+    if ((cleanedKey.startsWith('"') && cleanedKey.endsWith('"')) ||
+        (cleanedKey.startsWith("'") && cleanedKey.endsWith("'"))) {
+      cleanedKey = cleanedKey.slice(1, -1);
+    }
+    
+    // Replace escaped newlines with actual newlines
+    cleanedKey = cleanedKey.replace(/\\n/g, '\n');
+    
+    const parsedKey = JSON.parse(cleanedKey);
+    
     initializeApp({
-      credential: cert(JSON.parse(serviceAccountKey)),
+      credential: cert(parsedKey),
     });
     console.log("Firebase Admin initialized in credentials route");
   } catch (error: unknown) {
     console.error("Firebase Admin initialization error", error);
+    console.error("Service account key format issue. First 50 chars:", 
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.substring(0, 50));
     throw error;
   }
 }
