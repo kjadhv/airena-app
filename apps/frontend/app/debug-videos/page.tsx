@@ -175,3 +175,8 @@
 //     </div>
 //   );
 // }
+
+// app/debug-videos/page.tsx
+export default function DebugVideosPage() {
+  return null;
+}
