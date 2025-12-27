@@ -6,6 +6,7 @@ import { collection, getDocs, query, where, Timestamp } from "firebase/firestore
 import { useRouter, useParams } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay, EffectFade } from "swiper/modules";
+import Image from "next/image";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -99,11 +100,13 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
             className="cursor-pointer group"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
-            <img
-              src={content.thumbnailUrl}
-              alt={content.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
+            <Image
+  src={content.thumbnailUrl}
+  alt={content.title}
+  fill
+  sizes="100vw"
+  className="object-cover group-hover:scale-105 transition-transform duration-500"
+/>
             <div className="absolute bottom-0 left-0 p-6 lg:p-10 z-20">
               <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-3 drop-shadow-lg">
                 {content.title}
@@ -176,11 +179,13 @@ const VideoCard = ({ content }: { content: Content }) => {
     >
       <div className="flex flex-col">
         <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800 border border-transparent group-hover:border-emerald-500/60 transition-all duration-300">
-          <img
-            src={content.thumbnailUrl || "/placeholder-image.png"}
-            alt={content.title}
-            className="w-full h-full object-cover"
-          />
+          <Image
+  src={content.thumbnailUrl || "/placeholder-image.png"}
+  alt={content.title}
+  fill
+  sizes="(max-width: 640px) 100vw, 300px"
+  className="object-cover"
+/>
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           {content.duration > 0 && (
             <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs rounded-md font-semibold">

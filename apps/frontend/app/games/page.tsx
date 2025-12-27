@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from "react";
+import Image from "next/image";
 import { PlayCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { collection, getDocs, query, Timestamp, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
@@ -57,11 +58,16 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
             className="cursor-pointer group"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
-            <img
-              src={content.thumbnailUrl}
-              alt={content.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
+            <div className="relative w-full h-full">
+              <Image
+                src={content.thumbnailUrl}
+                alt={content.title}
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                sizes="100vw"
+                priority
+              />
+            </div>
             <div className="absolute bottom-0 left-0 p-6 lg:p-10 z-20">
               <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-3 drop-shadow-lg">
                 {content.title}
@@ -78,7 +84,6 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
 };
 
 const ContentRow = ({ title, content }: { title: string; content: Content[] }) => {
-  const router = useRouter();
   const swiperId = `swiper-${title.replace(/\s+/g, "-")}`;
   if (!content.length) return null;
 
@@ -139,10 +144,12 @@ const VideoCard = ({ content }: { content: Content }) => {
     >
       <div className="flex flex-col">
         <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800 border border-transparent group-hover:border-emerald-500/60 transition-all duration-300">
-          <img
+          <Image
             src={content.thumbnailUrl || "/placeholder-image.png"}
             alt={content.title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 280px, 300px"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           {content.duration > 0 && (

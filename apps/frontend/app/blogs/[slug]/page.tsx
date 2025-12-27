@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { doc, onSnapshot, Timestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/app/firebase/config";
 import { CalendarDays, ArrowLeft, Clock, User, Share2, Bookmark, Eye } from "lucide-react";
@@ -183,12 +184,13 @@ export default function BlogPostPage() {
   // Log view when post loads
   useEffect(() => {
     const logView = async () => {
-      if (!postIdRef.current || viewLoggedRef.current) {
+      const currentPostId = postIdRef.current;
+      if (!currentPostId || viewLoggedRef.current) {
         return;
       }
 
       viewLoggedRef.current = true;
-      console.log("🎯 Logging view for post:", postIdRef.current);
+      console.log("🎯 Logging view for post:", currentPostId);
 
       try {
         const headers = new Headers({
@@ -203,7 +205,7 @@ export default function BlogPostPage() {
           console.log("👤 Anonymous view logged");
         }
 
-        const response = await fetch(`/api/posts/${postIdRef.current}/view`, {
+        const response = await fetch(`/api/posts/${currentPostId}/view`, {
           method: "POST",
           headers: headers,
         });
@@ -226,7 +228,7 @@ export default function BlogPostPage() {
       const timer = setTimeout(logView, 1000);
       return () => clearTimeout(timer);
     }
-  }, [postIdRef.current, user, loading]);
+  }, [user, loading]);
 
   // Handle share functionality
   const handleShare = useCallback(async () => {
@@ -345,11 +347,13 @@ export default function BlogPostPage() {
         <section className="relative">
           {post.imageUrl ? (
             <div className="relative w-full h-[55vh] md:h-[65vh] overflow-hidden">
-              <img
+              <Image
                 src={post.imageUrl}
                 alt={post.title}
-                className="w-full h-full object-cover"
-                loading="eager"
+                fill
+                className="object-cover"
+                priority
+                sizes="100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
               <div className="absolute bottom-0 inset-x-0 p-6 md:p-12">

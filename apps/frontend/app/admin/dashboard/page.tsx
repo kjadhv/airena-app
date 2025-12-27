@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import Header from '@/app/components/Sidebar';
 import Footer from '@/app/components/Footer';
-import { ShieldCheck, UserCheck, Youtube, Twitter, Check, X } from 'lucide-react';
+import { ShieldCheck, Check, X } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 
 // Define the shape of an application object
@@ -134,8 +134,8 @@ const AdminDashboardPage = () => {
                                         </div>
                                         <p className="mt-4 text-gray-300 border-t border-gray-700 pt-4">{app.reason}</p>
                                         <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                                            {app.youtubeLink && <a href={app.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-red-400 hover:underline"><Youtube size={16}/> YouTube</a>}
-                                            {app.twitterLink && <a href={app.twitterLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-400 hover:underline"><Twitter size={16}/> Twitter/X</a>}
+                                            {/* {app.youtubeLink && <a href={app.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-red-400 hover:underline"><Youtube size={16}/> YouTube</a>}
+                                            {app.twitterLink && <a href={app.twitterLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-400 hover:underline"><Twitter size={16}/> Twitter/X</a>} */}
                                         </div>
                                     </div>
                                 ))}

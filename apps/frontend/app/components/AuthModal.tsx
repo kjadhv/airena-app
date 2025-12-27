@@ -46,18 +46,18 @@ export default function AuthModal() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      await loginWithGoogle();
-      setIsModalOpen(false); // Close modal on success
-    } catch (err) {
-      setError("Could not sign in with Google. Please try again.");
-    } finally {
-        setLoading(false);
-    }
+ const handleGoogleSignIn = async () => {
+  setError("");
+  setLoading(true);
+  try {
+    await loginWithGoogle();
+    setIsModalOpen(false);
+  } catch {
+    setError("Could not sign in with Google. Please try again.");
+  } finally {
+    setLoading(false);
   }
+};
 
   return (
     <div

@@ -21,7 +21,6 @@ import {
   Quote,
   ImageIcon,
   Link2,
-  Twitter,
   Table as TableIcon,
   Code,
   Minus,

@@ -63,8 +63,13 @@ const NewPostPage = () => {
             const { slug } = await response.json();
             router.push(`/blogs/${slug}`);
         } catch (err: unknown) {
-            setError((err as Error).message);
-        } finally {
+    if (err instanceof Error) {
+        setError(err.message);
+    } else {
+        setError("Something went wrong while publishing the post.");
+    }
+}
+ finally {
             setIsSubmitting(false);
         }
     };

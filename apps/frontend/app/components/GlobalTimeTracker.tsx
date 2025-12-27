@@ -5,7 +5,6 @@ import { useEffect } from "react";
 export default function GlobalTimeTracker() {
   useEffect(() => {
     let start = Date.now();
-    let interval: number;
 
     const saveTime = () => {
       const now = Date.now();
@@ -22,7 +21,7 @@ export default function GlobalTimeTracker() {
       start = now;
     };
 
-    interval = window.setInterval(saveTime, 10000);
+    const interval = window.setInterval(saveTime, 10000);
 
     const handleVisibility = () => {
       if (document.hidden) {
@@ -41,5 +40,5 @@ export default function GlobalTimeTracker() {
     };
   }, []);
 
-  return null; // invisible global logic
+  return null;
 }

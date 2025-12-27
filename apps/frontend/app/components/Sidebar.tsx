@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
 import {
@@ -154,12 +155,16 @@ export default function Sidebar() {
           {/* Logo */}
           <div className="flex items-center justify-center mb-10 mt-2">
             <Link href="/" className="block">
-              <img
-                src="/headerlogo.png"
-                alt="Logo"
-                className="h-10 w-auto hover:scale-105 transition-transform"
-                draggable={false}
-              />
+              <div className="relative h-10 w-32">
+                <Image
+                  src="/headerlogo.png"
+                  alt="Logo"
+                  fill
+                  className="object-contain hover:scale-105 transition-transform"
+                  draggable={false}
+                  priority
+                />
+              </div>
             </Link>
           </div>
 
@@ -180,15 +185,19 @@ export default function Sidebar() {
             {user ? (
               <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 group transition-all">
                 <Link href="/profile">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt="Profile"
-                    className="w-10 h-10 rounded-full object-cover border border-white/10"
-                  />
-                ) : (
-                  <UserCircle size={40} className="text-gray-400" />
-                )}
+                  {user.photoURL ? (
+                    <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10">
+                      <Image
+                        src={user.photoURL}
+                        alt="Profile"
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
+                    </div>
+                  ) : (
+                    <UserCircle size={40} className="text-gray-400" />
+                  )}
                 </Link>
                 <div
                   className={`transition-all ${
@@ -228,21 +237,29 @@ export default function Sidebar() {
           </button>
 
           <Link href="/" className="flex items-center justify-center">
-            <img
-              src="/headerlogo.png"
-              alt="Logo"
-              className="h-8 w-auto brightness-125"
-              draggable={false}
-            />
+            <div className="relative h-8 w-24">
+              <Image
+                src="/headerlogo.png"
+                alt="Logo"
+                fill
+                className="object-contain brightness-125"
+                draggable={false}
+                priority
+              />
+            </div>
           </Link>
 
           <Link href="/profile">
             {user ? (
-              <img
-                src={user.photoURL || "/default-user.png"}
-                alt="Profile"
-                className="w-8 h-8 rounded-full border border-emerald-500/30"
-              />
+              <div className="relative w-8 h-8 rounded-full overflow-hidden border border-emerald-500/30">
+                <Image
+                  src={user.photoURL || "/default-user.png"}
+                  alt="Profile"
+                  fill
+                  className="object-cover"
+                  sizes="32px"
+                />
+              </div>
             ) : (
               <UserCircle size={28} className="text-gray-400" />
             )}

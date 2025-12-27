@@ -2,6 +2,7 @@ import React from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Autoplay } from "swiper/modules";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import Image from "next/image";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -103,11 +104,13 @@ const EventCard = ({ event }: { event: Event }) => {
       <div className="flex items-start gap-4">
         {/* Event Logo */}
         <div className="shrink-0">
-          <img
-            src={event.logo}
-            alt={event.name}
-            className="w-20 h-20 rounded-lg object-cover bg-gray-700/50"
-          />
+          <Image
+  src={event.logo}
+  alt={event.name}
+  width={80}
+  height={80}
+  className="rounded-lg object-cover bg-gray-700/50"
+/>
         </div>
 
         {/* Event Details */}

@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, JSX } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   User,
   Settings,
@@ -247,7 +248,14 @@ export default function ProfilePage(): JSX.Element {
             <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 blur-xl opacity-60 group-hover:opacity-80 transition-opacity animate-pulse"></div>
             <div className="relative w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 p-1 shadow-[0_0_30px_rgba(16,185,129,0.6)]">
               <div className="w-full h-full rounded-full bg-gray-900 flex items-center justify-center overflow-hidden">
-                {user.photoURL ? ( <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" /> ) : (
+                {user.photoURL ? ( <Image
+  src={user.photoURL}
+  alt={user.displayName}
+  fill
+  sizes="112px"
+  className="object-cover"
+/>
+) : (
                   <span className="text-3xl font-medium text-gray-400">{user.displayName?.charAt(0).toUpperCase()}</span>
                 )}
               </div>

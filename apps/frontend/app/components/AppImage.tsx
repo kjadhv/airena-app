@@ -1,52 +1,50 @@
 // app/components/AppImage.tsx
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 
 interface AppImageProps {
   src: string;
   alt: string;
-  className?: string; // This will now apply directly to the Next.js Image component
+  className?: string;
   fallbackText: string;
+  priority?: boolean;
 }
 
 const AppImage: React.FC<AppImageProps> = ({
   src,
   alt,
-  className,
+  className = "",
   fallbackText,
+  priority = false,
 }) => {
-  const [hasError, setHasError] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
 
-  // When the src prop changes, reset the error state to try loading the new image
+  // Reset image source if src prop changes
   useEffect(() => {
-    setHasError(false);
+    setCurrentSrc(src);
   }, [src]);
 
   const fallbackSrc = `https://placehold.co/600x400/111111/FFFFFF?text=${encodeURIComponent(
     fallbackText
   )}`;
 
-  if (hasError) {
-    // If an error occurred, render a simple <img> tag with the fallback.
-    return (
-      <img
-        src={fallbackSrc}
-        alt={alt}
-        className={`w-full h-full object-cover ${className}`}
-      />
-    );
-  }
-
-  // The component that uses AppImage MUST provide a container with position: relative
   return (
     <Image
-      src={src}
+      src={currentSrc || fallbackSrc}
       alt={alt}
       fill
-      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      priority={priority}
+      sizes="(max-width: 768px) 100vw,
+             (max-width: 1200px) 50vw,
+             33vw"
       className={`object-cover ${className}`}
-      onError={() => setHasError(true)}
+      onError={() => {
+        if (currentSrc !== fallbackSrc) {
+          setCurrentSrc(fallbackSrc);
+        }
+      }}
     />
   );
 };

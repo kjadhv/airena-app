@@ -1,6 +1,7 @@
 // app/live/page.tsx
 "use client";
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import Header from "@/app/components/Sidebar";
 import Footer from "@/app/components/Footer";
 import { Play, Users, Wifi, WifiOff } from "lucide-react";
@@ -166,13 +167,15 @@ export default function LivePage() {
                   <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700/50 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/20 hover:-translate-y-2">
                     {/* Thumbnail */}
                     <div className="relative aspect-video overflow-hidden">
-                      <img
+                      <Image
                         src={stream.thumbnailUrl || "/placeholder-stream.jpg"}
                         alt={stream.title}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        fill
+                        className="object-cover group-hover:scale-110 transition-transform duration-300"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       />
                       {/* Live Badge */}
-                      <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white rounded-full text-sm font-bold shadow-lg">
+                      <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white rounded-full text-sm font-bold shadow-lg z-10">
                         <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
                         LIVE
                       </div>
@@ -193,11 +196,15 @@ export default function LivePage() {
                       {/* Author Info */}
                       <div className="flex items-center gap-3">
                         {stream.authorPhotoURL ? (
-                          <img
-                            src={stream.authorPhotoURL}
-                            alt={stream.authorName}
-                            className="w-10 h-10 rounded-full border-2 border-gray-700"
-                          />
+                          <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-gray-700">
+                            <Image
+                              src={stream.authorPhotoURL}
+                              alt={stream.authorName}
+                              fill
+                              className="object-cover"
+                              sizes="40px"
+                            />
+                          </div>
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold">
                             {stream.authorName.charAt(0).toUpperCase()}

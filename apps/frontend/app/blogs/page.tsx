@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { db } from "@/app/firebase/config";
 import {
   collection,
@@ -20,7 +21,6 @@ import {
   Calendar,
   User,
   ArrowRight,
-  Eye,
   Plus,
   Clock,
   Share2,
@@ -31,7 +31,6 @@ import { useRouter, useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { processContentForEmbeds } from "@/app/lib/processContent";
 import ReadingProgress from "@/app/components/ReadingProgress";
-import ReactionBar from "@/app/components/ReactionBar";
 const CommentSection = dynamic(
   () => import("@/app/components/CommentSection"),
   { ssr: false }
@@ -120,15 +119,15 @@ const BlogPage = () => {
         return unsubscribe;
       };
 
-let unsubscribe: (() => void) | undefined;
+      let unsubscribe: (() => void) | undefined;
 
-fetchPost().then((unsub) => {
-  unsubscribe = unsub;
-});
+      fetchPost().then((unsub) => {
+        unsubscribe = unsub;
+      });
 
-return () => {
-  if (unsubscribe) unsubscribe();
-};
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
     } else {
       const postsCollection = collection(db, "posts");
       const q = query(postsCollection, orderBy("createdAt", "desc"));
@@ -356,11 +355,16 @@ return () => {
                   className="group block rounded-xl overflow-hidden border border-gray-700 hover:border-emerald-500/30 transition"
                 >
                   {topStory.imageUrl && (
-                    <img
-                      src={topStory.imageUrl}
-                      alt={topStory.title}
-                      className="w-full object-cover h-60 sm:h-80 group-hover:scale-105 transition-transform duration-700"
-                    />
+                    <div className="relative w-full h-60 sm:h-80 overflow-hidden">
+                      <Image
+                        src={topStory.imageUrl}
+                        alt={topStory.title}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-700"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                        priority
+                      />
+                    </div>
                   )}
                   <div className="p-6 bg-gradient-to-b from-gray-900/90 via-black/70 to-black">
                     <h3 className="text-2xl font-bold mb-2 group-hover:text-emerald-400 transition">
@@ -406,11 +410,15 @@ return () => {
                       className="group block flex-grow rounded-xl overflow-hidden border border-gray-700 hover:border-emerald-500/30 transition"
                     >
                       {p.imageUrl && (
-                        <img
-                          src={p.imageUrl}
-                          alt={p.title}
-                          className="h-40 w-full object-cover group-hover:scale-105 transition-transform"
-                        />
+                        <div className="relative h-40 w-full overflow-hidden">
+                          <Image
+                            src={p.imageUrl}
+                            alt={p.title}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          />
+                        </div>
                       )}
                       <div className="p-4 flex flex-col flex-grow">
                         <h3 className="text-lg font-bold mb-2 group-hover:text-emerald-400 transition">

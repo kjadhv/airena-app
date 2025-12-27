@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import Hls from "hls.js";
 import type { Level } from "hls.js";
 import {
@@ -224,14 +224,14 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     handleUserActivity();
   };
 
-  const handleUserActivity = () => {
+  const handleUserActivity = useCallback(() => {
     setShowControls(true);
     if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
     controlsTimeout.current = setTimeout(() => {
       setShowControls(false);
       setShowQualityMenu(false);
     }, 3000);
-  };
+  }, []);
   
   useEffect(() => {
     handleUserActivity();
@@ -240,9 +240,9 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
         clearTimeout(controlsTimeout.current);
       }
     };
-  }, []);
+  }, [handleUserActivity]);
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     const container = videoRef.current?.parentElement;
     if (!container) return;
     if (!document.fullscreenElement) {
@@ -251,9 +251,9 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
       document.exitFullscreen();
     }
     handleUserActivity();
-  };
+  }, [handleUserActivity]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
@@ -264,7 +264,28 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
       setTimeout(() => setShowCenterPause(false), 1000);
     }
     handleUserActivity();
-  };
+  }, [handleUserActivity]);
+
+  const skip = useCallback((howMuch: number) => {
+    if (!videoRef.current || duration === Infinity) return;
+    const newTime = videoRef.current.currentTime + howMuch;
+    videoRef.current.currentTime = Math.max(0, Math.min(newTime, duration));
+    handleUserActivity();
+  }, [duration, handleUserActivity]);
+
+  const toggleMute = useCallback(() => {
+    if (videoRef.current) {
+      const currentlyMuted = !videoRef.current.muted;
+      videoRef.current.muted = currentlyMuted;
+      setIsMuted(currentlyMuted);
+      if (!currentlyMuted && volume === 0) {
+        const newVolume = 1;
+        setVolume(newVolume);
+        videoRef.current.volume = newVolume;
+      }
+    }
+    handleUserActivity();
+  }, [volume, handleUserActivity]);
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
@@ -284,20 +305,13 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
     const playerElement = videoRef.current?.parentElement;
     playerElement?.addEventListener("keydown", handleKeydown);
     return () => playerElement?.removeEventListener("keydown", handleKeydown);
-  }, [isPlaying, isMuted, currentTime, duration, isFullscreen, isLiveStream]);
+  }, [togglePlay, skip, toggleMute, toggleFullscreen, isLiveStream]);
 
   const handleProgress = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!videoRef.current) return;
     const value = parseFloat(e.target.value);
     videoRef.current.currentTime = value;
     setCurrentTime(value);
-    handleUserActivity();
-  };
-
-  const skip = (howMuch: number) => {
-    if (!videoRef.current || duration === Infinity) return;
-    const newTime = videoRef.current.currentTime + howMuch;
-    videoRef.current.currentTime = Math.max(0, Math.min(newTime, duration));
     handleUserActivity();
   };
 
@@ -309,20 +323,6 @@ const AirenaVideoPlayer: React.FC<AirenaVideoPlayerProps> = ({
       const muted = newVolume === 0;
       videoRef.current.muted = muted;
       setIsMuted(muted);
-    }
-    handleUserActivity();
-  };
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const currentlyMuted = !videoRef.current.muted;
-      videoRef.current.muted = currentlyMuted;
-      setIsMuted(currentlyMuted);
-      if (!currentlyMuted && volume === 0) {
-        const newVolume = 1;
-        setVolume(newVolume);
-        videoRef.current.volume = newVolume;
-      }
     }
     handleUserActivity();
   };

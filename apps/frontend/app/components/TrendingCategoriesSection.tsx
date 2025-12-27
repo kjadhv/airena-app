@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation } from "swiper/modules";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -34,8 +35,8 @@ const TrendingCategoriesSection = ({ videos, isLoading = false }: Props) => {
   const router = useRouter();
   const [categoriesWithViews, setCategoriesWithViews] = useState<CategoryWithViews[]>([]);
 
-  // Define the 10 categories
-  const baseCategories: Category[] = [
+  // Define the 10 categories using useMemo to make it stable
+  const baseCategories: Category[] = useMemo(() => [
     {
       id: "boxing",
       name: "Boxing",
@@ -96,7 +97,7 @@ const TrendingCategoriesSection = ({ videos, isLoading = false }: Props) => {
       image: "/player1.jpg",
       gradient: "from-purple-600/80 to-indigo-600/80",
     },
-  ];
+  ], []);
 
   useEffect(() => {
     const categoryViewsMap = new Map<string, number>();
@@ -126,7 +127,7 @@ const TrendingCategoriesSection = ({ videos, isLoading = false }: Props) => {
     const sortedCategories = updatedCategories.sort((a, b) => b.totalViews - a.totalViews);
 
     setCategoriesWithViews(sortedCategories);
-  }, [videos]);
+  }, [videos, baseCategories]);
 
   const formatViews = (count: number): string => {
     if (count === 0) return "0";
@@ -220,10 +221,12 @@ const CategoryCard = ({
     >
       <div className="relative aspect-[3/4] rounded-xl overflow-hidden mb-2">
         {/* Category Image */}
-        <img
+        <Image
           src={category.image}
           alt={category.name}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-110"
+          sizes="(max-width: 640px) 140px, (max-width: 1024px) 160px, 180px"
         />
 
         {/* Gradient Overlay */}

@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import Image from "next/image";
 import { UploadCloud, Film, Image as ImageIcon, Tag, Eye } from 'lucide-react';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
@@ -43,9 +44,11 @@ const UploadForm = () => {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 return await fn();
-            } catch (error: any) {
+            } catch (error: unknown) {
                 if (i === maxRetries - 1) throw error;
-                console.log(`Retry ${i + 1}/${maxRetries} after error:`, error.message);
+
+                const message = error instanceof Error ? error.message : String(error);
+                console.log(`Retry ${i + 1}/${maxRetries} after error:`, message);
                 await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
             }
         }
@@ -232,11 +235,16 @@ const UploadForm = () => {
                             <ImageIcon size={20}/> Thumbnail
                         </label>
                         <div 
-                            className="aspect-video w-full bg-gray-800 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors"
+                            className="relative aspect-video w-full bg-gray-800 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors overflow-hidden"
                             onClick={() => thumbnailInputRef.current?.click()}
                         >
                             {thumbnailPreview ? (
-                                <img src={thumbnailPreview} alt="Thumbnail preview" className="w-full h-full object-cover rounded-md" />
+                                <Image
+                                    src={thumbnailPreview}
+                                    alt="Thumbnail preview"
+                                    fill
+                                    className="object-cover rounded-md"
+                                />
                             ) : (
                                 <div className="text-center text-gray-400">
                                     <ImageIcon size={40} className="mx-auto mb-2" />

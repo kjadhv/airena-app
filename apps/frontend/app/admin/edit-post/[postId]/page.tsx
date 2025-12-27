@@ -38,7 +38,7 @@ const EditPostPage = () => {
                     setContent(data.content);
                     setIsFeatured(data.isFeatured || false);
                     setExistingImageUrl(data.imageUrl);
-                } catch (err) {
+                } catch {
                     setError("Failed to load post data.");
                 } finally {
                     setIsLoadingPost(false);
