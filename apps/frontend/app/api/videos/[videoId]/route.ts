@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
+export const dynamic = 'force-dynamic';
+
+type RouteContext = {
+  params: {
+    videoId: string;
+  };
+};
 // --- UPDATE a specific video (PUT) ---
 export async function PUT(
     req: NextRequest,
-    context: { params: Promise<{ videoId: string }> }
+    { params }: RouteContext
 ) {
     try {
-        const { videoId } = await context.params;
+        const { videoId } = params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -58,10 +65,10 @@ export async function PUT(
 // --- DELETE a specific video ---
 export async function DELETE(
     req: NextRequest,
-    context: { params: Promise<{ videoId: string }> }
+    { params }: RouteContext
 ) {
     try {
-        const { videoId } = await context.params;
+        const { videoId } = params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -92,10 +99,10 @@ export async function DELETE(
 // --- INCREMENT video views (POST) - REVISED FOR UNIQUE VIEWS & ROBUSTNESS ---
 export async function POST(
     req: NextRequest,
-    context: { params: Promise<{ videoId: string }> }
+    { params }: RouteContext
 ) {
     try {
-        const { videoId } = await context.params;
+        const { videoId } = params;
         const videoRef = db.collection('videos').doc(videoId);
 
         // ✅ Check if the video document exists right at the beginning

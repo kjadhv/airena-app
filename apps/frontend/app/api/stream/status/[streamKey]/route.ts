@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+type RouteContext = {
+  params: {
+    streamKey: string;
+  };
+};
 /**
  * Handles GET requests to fetch the status of a specific stream.
  */
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ streamKey: string }> } // <-- Updated for Next.js 15+
+  { params }: RouteContext
 ) {
-  const { streamKey } = await context.params; // Await the params Promise
+  const { streamKey } = params; // Await the params Promise
   const backendApiUrl = process.env.NESTJS_BACKEND_URL;
 
   if (!backendApiUrl) {
@@ -18,18 +22,26 @@ export async function GET(
     );
   }
 
-  try {
-    const backendResponse = await fetch(`${backendApiUrl}/stream/status/${streamKey}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-    });
+   try {
+    const backendResponse = await fetch(
+      `${backendApiUrl}/stream/status/${streamKey}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      }
+    );
 
-    if (!backendResponse.ok) {
+      if (!backendResponse.ok) {
       const errorText = await backendResponse.text();
-      console.error('Backend response error:', backendResponse.status, errorText);
+      console.error(
+        'Backend response error:',
+        backendResponse.status,
+        errorText
+      );
+
       return NextResponse.json(
         { message: 'Failed to fetch stream status from backend' },
         { status: backendResponse.status }

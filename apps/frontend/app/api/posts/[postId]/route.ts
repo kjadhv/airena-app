@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, authAdmin, storage as adminStorage } from '@/app/firebase/firebaseAdmin';
 import slugify from 'slugify';
 
-interface RouteParams {
-    params: Promise<{ postId: string }>;
+interface RouteContext {
+    params: { postId: string };
 }
 
 // GET: Fetches a single post's data for the edit page
-export async function GET(req: NextRequest, context: RouteParams) {
-    try {
-        const { postId } = await context.params;
+export async function GET(
+  req: NextRequest,
+  { params }: RouteContext
+) {
+  try {
+    const { postId } = params;
         const docRef = db.collection('posts').doc(postId);
         const doc = await docRef.get();
 
@@ -24,7 +27,7 @@ export async function GET(req: NextRequest, context: RouteParams) {
 }
 
 // PUT: Updates an existing post
-export async function PUT(req: NextRequest, context: RouteParams) {
+export async function PUT(req: NextRequest, context: RouteContext) {
     try {
         const { postId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
@@ -73,7 +76,7 @@ export async function PUT(req: NextRequest, context: RouteParams) {
 }
 
 // DELETE: Deletes a post
-export async function DELETE(req: NextRequest, context: RouteParams) {
+export async function DELETE(req: NextRequest, context: RouteContext) {
     try {
         const { postId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
