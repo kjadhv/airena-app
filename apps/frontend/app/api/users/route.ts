@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
         }
 
         const listUsersResult = await authAdmin.listUsers(1000); // Get up to 1000 users
-        const users = listUsersResult.users.map(user => ({
+        const users = listUsersResult.users.map((user: any) => ({
             uid: user.uid,
             email: user.email,
             displayName: user.displayName || 'No Name',
