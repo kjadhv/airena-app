@@ -4,15 +4,21 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(
     req: NextRequest, 
-    { params }: { params: Promise<{ postId: string }> }
+    { params }: { params: { postId: string } }
 ) {
     try {
-        const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
-        if (!idToken) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const { postId } = params; // ✅ FIXED HERE
+        const idToken = req.headers
+      .get('Authorization')
+      ?.split('Bearer ')[1];
+
+         if (!idToken) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
         
-        const { postId } = await params;
         const { text } = await req.json();
 
         if (!text || typeof text !== 'string' || text.trim().length === 0) {
