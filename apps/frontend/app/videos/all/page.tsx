@@ -31,6 +31,7 @@ interface Content {
   thumbnailUrl: string;
   tags: string[];
   duration: number;
+  authorId: string;
 }
 
 /* ---------------- HERO CAROUSEL ---------------- */
@@ -158,7 +159,11 @@ const VideoCard = ({ content }: { content: Content }) => {
         </div>
 
         <div className="flex items-start gap-3 mt-3">
-          <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
+          <UserAvatar
+  userId={content.authorId}
+  alt={content.authorName}
+  size={38}
+/>
           <div className="flex-1">
             <h3 className="font-semibold text-white line-clamp-2 leading-tight">{content.title}</h3>
             <p className="text-sm text-gray-400">{content.authorName}</p>
@@ -227,6 +232,7 @@ const AllVideosContent = () => {
             description: d.description || "",
             category: d.category || "games",
             createdAt: createdAtTimestamp ? createdAtTimestamp.toDate() : new Date(),
+            authorId: d.authorId || "",  
             authorName: d.authorName || "Unknown",
             authorPhotoURL: d.authorPhotoURL || null,
             views: d.views || 0,

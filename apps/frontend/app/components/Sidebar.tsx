@@ -5,7 +5,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
+import UserAvatar from "@/app/components/UserAvatar";
 import {
+  TvMinimalPlay,
   Tv,
   Newspaper,
   Dumbbell,
@@ -43,27 +45,25 @@ const SidebarItem = ({
   const isSignIn = text === "Sign In";
   const { setIsModalOpen } = useAuth();
 
-  const colorClass =
-    activeColor === "red"
-      ? "text-red-500 group-hover:text-red-400"
-      : "text-emerald-400 group-hover:text-emerald-300";
-  const bgClass = activeColor === "red" ? "bg-red-500/10" : "bg-emerald-500/10";
-
   const content = (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl group transition-all w-full ${
-        isActive
-          ? `${bgClass} font-semibold shadow`
-          : `text-gray-400 hover:bg-white/[0.05] hover:text-${activeColor}-300`
-      }`}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl group transition-all w-full
+    ${
+      isActive
+        ? "bg-emerald-500/10 text-emerald-400 font-semibold shadow-[0_0_20px_rgba(16,185,129,0.8)] ring-1 ring-emerald-400/40"
+        : "text-gray-400 hover:bg-white/[0.05] hover:text-emerald-300 hover:shadow-[0_0_12px_rgba(16,185,129,0.5)]"
+    }`}
     >
       <div className="relative">
         <Icon
           width={mobile ? 24 : 22}
           height={mobile ? 24 : 22}
-          className={`shrink-0 transition-transform group-hover:scale-110 ${
-            isActive ? colorClass : ""
-          }`}
+          className={`shrink-0 transition-transform group-hover:scale-110
+    ${
+      activeColor === "red"
+        ? "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,1)]"
+        : "text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]"
+    }`}
         />
         {isActive && !mobile && (
           <span
@@ -131,7 +131,7 @@ export default function Sidebar() {
   }, [isMobileOpen]);
 
   const navItems = [
-    { icon: Tv, text: "Live", href: "/live", activeColor: "red" },
+    { icon: TvMinimalPlay, text: "Live", href: "/live", activeColor: "emerald" },
     { icon: Tv, text: "Watch", href: "/watch" },
     { icon: Newspaper, text: "Blogs", href: "/blogs" },
     { icon: Dumbbell, text: "Sports", href: "/sports" },
@@ -185,19 +185,11 @@ export default function Sidebar() {
             {user ? (
               <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 group transition-all">
                 <Link href="/profile">
-                  {user.photoURL ? (
-                    <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10">
-                      <Image
-                        src={user.photoURL}
-                        alt="Profile"
-                        fill
-                        className="object-cover"
-                        sizes="40px"
-                      />
-                    </div>
-                  ) : (
-                    <UserCircle size={40} className="text-gray-400" />
-                  )}
+                  <UserAvatar
+                    userId={user.uid}
+                    alt={user.displayName || "User"}
+                    size={40}
+                  />
                 </Link>
                 <div
                   className={`transition-all ${
@@ -228,14 +220,30 @@ export default function Sidebar() {
       {/* 📱 Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => setIsMobileOpen(true)}
-            className="p-2 hover:bg-white/10 rounded-lg transition"
-            aria-label="Open menu"
-          >
-            <Menu size={24} className="text-emerald-400" />
-          </button>
+          {/* Left side: Hamburger and Profile Avatar */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="p-2 hover:bg-white/10 rounded-lg transition"
+              aria-label="Open menu"
+            >
+              <Menu size={24} className="text-emerald-400" />
+            </button>
 
+            <Link href="/profile">
+              {user ? (
+                <UserAvatar
+                  userId={user.uid}
+                  alt={user.displayName || "User"}
+                  size={32}
+                />
+              ) : (
+                <UserCircle size={28} className="text-gray-400" />
+              )}
+            </Link>
+          </div>
+
+          {/* Center: Logo */}
           <Link href="/" className="flex items-center justify-center">
             <div className="relative h-8 w-24">
               <Image
@@ -249,28 +257,15 @@ export default function Sidebar() {
             </div>
           </Link>
 
-          <Link href="/profile">
-            {user ? (
-              <div className="relative w-8 h-8 rounded-full overflow-hidden border border-emerald-500/30">
-                <Image
-                  src={user.photoURL || "/default-user.png"}
-                  alt="Profile"
-                  fill
-                  className="object-cover"
-                  sizes="32px"
-                />
-              </div>
-            ) : (
-              <UserCircle size={28} className="text-gray-400" />
-            )}
-          </Link>
+          {/* Right side: Empty for balance */}
+          <div className="w-[68px]"></div>
         </div>
       </header>
 
       {/* 📱 Mobile Fullscreen Menu */}
       <div
-        className={`lg:hidden fixed inset-0 z-50 transition-all duration-300 ease-in-out ${
-          isMobileOpen ? "visible" : "invisible"
+        className={`lg:hidden fixed inset-0 z-[60] ${
+          isMobileOpen ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >
         {/* Backdrop */}
@@ -288,54 +283,54 @@ export default function Sidebar() {
           }`}
         >
           <div className="flex flex-col h-full p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Menu</h2>
-              <button
-                onClick={() => setIsMobileOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition"
-              >
-                <X size={24} className="text-gray-400" />
-              </button>
-            </div>
-
-            <nav className="flex flex-col gap-2 flex-grow">
-              {navItems.map((item) => (
-                <SidebarItem
-                  key={item.text}
-                  {...item}
-                  isExpanded={true}
-                  mobile={true}
-                  onClick={() => setIsMobileOpen(false)}
-                />
-              ))}
-            </nav>
-
-            <div className="border-t border-white/10 pt-4 mt-4">
-              {user ? (
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-white">Menu</h2>
                 <button
-                  onClick={() => {
-                    logout();
-                    setIsMobileOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition"
-                >
-                  <LogOut size={22} />
-                  <span className="font-medium">Sign Out</span>
-                </button>
-              ) : (
-                <SidebarItem
-                  icon={LogIn}
-                  text="Sign In"
-                  href="#"
-                  isExpanded={true}
-                  mobile={true}
                   onClick={() => setIsMobileOpen(false)}
-                />
-              )}
+                  className="p-2 hover:bg-white/10 rounded-full transition"
+                >
+                  <X size={24} className="text-gray-400" />
+                </button>
+              </div>
+
+              <nav className="flex flex-col gap-2 flex-grow">
+                {navItems.map((item) => (
+                  <SidebarItem
+                    key={item.text}
+                    {...item}
+                    isExpanded={true}
+                    mobile={true}
+                    onClick={() => setIsMobileOpen(false)}
+                  />
+                ))}
+              </nav>
+
+              <div className="border-t border-white/10 pt-4 mt-4">
+                {user ? (
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsMobileOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition"
+                  >
+                    <LogOut size={22} />
+                    <span className="font-medium">Sign Out</span>
+                  </button>
+                ) : (
+                  <SidebarItem
+                    icon={LogIn}
+                    text="Sign In"
+                    href="#"
+                    isExpanded={true}
+                    mobile={true}
+                    onClick={() => setIsMobileOpen(false)}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
     </>
   );
 }

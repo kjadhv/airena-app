@@ -17,6 +17,8 @@ import {
   Timestamp,
   doc,
   getDoc,
+  setDoc,
+  onSnapshot,
   DocumentData,
 } from "firebase/firestore";
 import {
@@ -30,6 +32,7 @@ import {
   Crown,
   Settings,
   Lock,
+  Calendar,
 } from "lucide-react";
 import AppImage from "@/app/components/AppImage";
 import { Dialog, Transition } from "@headlessui/react";
@@ -60,7 +63,7 @@ interface Channel {
   photoURL: string | null;
   youtubeLink?: string;
   twitterLink?: string;
-  subscribers?: number;
+  subscriberCount?: number;
 }
 
 const CreatorDashboardPage: React.FC = () => {
@@ -97,8 +100,23 @@ const CreatorDashboardPage: React.FC = () => {
           // fetch channel
           const channelRef = doc(db, "channels", user.uid);
           const channelSnap = await getDoc(channelRef);
-          if (channelSnap.exists()) setChannel(channelSnap.data() as Channel);
 
+          // CREATE CHANNEL ONLY ONCE IF IT DOESN'T EXIST
+          if (!channelSnap.exists()) {
+            await setDoc(channelRef, {
+              subscriberCount: 0,
+              channelName: user.displayName || "Unknown",
+              photoURL: user.photoURL || null,
+              createdAt: Timestamp.now(),
+            });
+          }
+          
+          // NOW READ AND SET STATE
+          const updatedSnap = await getDoc(channelRef);
+          if (updatedSnap.exists()) {
+            setChannel(updatedSnap.data() as Channel);
+          }
+          
           // fetch videos authored by user
           const videosRef = collection(db, "videos");
           const q = query(
@@ -138,26 +156,51 @@ const CreatorDashboardPage: React.FC = () => {
     }
   }, [user, loading, isCreator, router]);
 
+  // Real-time subscriber count listener
+  useEffect(() => {
+    if (!user || !isCreator) return;
+
+    const channelRef = doc(db, "channels", user.uid);
+    
+    const unsubscribe = onSnapshot(channelRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setChannel((prev) => ({
+          ...prev,
+          channelName: data.channelName || prev?.channelName || user.displayName || "Unknown",
+          photoURL: data.photoURL || prev?.photoURL || user.photoURL || null,
+          subscriberCount: data.subscriberCount || 0,
+          youtubeLink: data.youtubeLink,
+          twitterLink: data.twitterLink,
+        }));
+      }
+    }, (error) => {
+      console.error("Error listening to channel updates:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user, isCreator]);
+
   // Show login prompt if user is not signed in
   if (!loading && !user) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center shadow-2xl">
+        <div className="max-w-md w-full bg-gradient-to-br from-gray-900/80 to-black/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 text-center shadow-2xl">
           <div className="mb-6 flex justify-center">
-            <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center">
-              <Lock className="text-emerald-400" size={40} />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-500/10 rounded-full flex items-center justify-center">
+              <Lock className="text-emerald-400" size={32} />
             </div>
           </div>
           
-          <h1 className="text-3xl font-bold text-white mb-3">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">
             Creator Access Required
           </h1>
           
-          <p className="text-gray-400 mb-4 text-lg">
+          <p className="text-gray-400 mb-4 text-base sm:text-lg">
             Please login or sign up first to become a creator and access the dashboard.
           </p>
           
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-500 text-xs sm:text-sm">
             The login modal should appear automatically. If it doesn&apos;t, please refresh the page.
           </p>
         </div>
@@ -167,8 +210,11 @@ const CreatorDashboardPage: React.FC = () => {
 
   if (loading || isLoadingContent || !isCreator) {
     return (
-      <div className="h-screen bg-black flex items-center justify-center text-white">
-        Verifying Creator Access...
+      <div className="h-screen bg-black flex items-center justify-center text-white px-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-sm sm:text-base">Verifying Creator Access...</p>
+        </div>
       </div>
     );
   }
@@ -197,24 +243,26 @@ const CreatorDashboardPage: React.FC = () => {
     <div className="bg-black text-white min-h-screen flex flex-col">
       <Header />
 
-      {/* Enhanced Header */}
-      <div className="border-b border-gray-900 bg-gradient-to-r from-gray-950 via-emerald-950/10 to-gray-950 pt-10">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <h1 className="text-lg font-medium text-white tracking-tight">Creator Dashboard</h1>
-          <button className="p-2 hover:bg-gray-900 rounded-lg transition-all hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/20 cursor-pointer">
-            <Settings className="w-5 h-5 text-gray-400 hover:text-emerald-400 transition-colors" />
-          </button>
+      {/* Enhanced Header - Responsive */}
+      <div className="border-b border-gray-900 bg-gradient-to-r from-gray-950 via-emerald-950/10 to-gray-950 pt-20 sm:pt-16 md:pt-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <h1 className="text-base sm:text-lg font-medium text-white tracking-tight">Creator Dashboard</h1>
+          <Link href="/settings">
+            <button className="p-2 hover:bg-gray-900 rounded-lg transition-all hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/20 cursor-pointer">
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 hover:text-emerald-400 transition-colors" />
+            </button>
+          </Link>
         </div>
       </div>
 
       <main className="flex-grow pb-16">
-        <div className="max-w-6xl mx-auto px-6 py-12">
-          {/* Profile Section */}
-          <div className="flex items-start gap-8 mb-12">
-            {/* Avatar with Neon Glow */}
-            <div className="relative group flex-shrink-0">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 md:py-12">
+          {/* Profile Section - Responsive */}
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-10 md:mb-12">
+            {/* Avatar with Neon Glow - Responsive sizing */}
+            <div className="relative group flex-shrink-0 mx-auto sm:mx-0">
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-400 via-green-400 to-emerald-500 blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-300 animate-pulse"></div>
-              <div className="relative w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 p-1 shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:shadow-[0_0_50px_rgba(16,185,129,0.9)] transition-all duration-300 group-hover:scale-105">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 p-1 shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:shadow-[0_0_50px_rgba(16,185,129,0.9)] transition-all duration-300 group-hover:scale-105">
                 <div className="w-full h-full rounded-full bg-gray-900 flex items-center justify-center overflow-hidden ring-2 ring-emerald-400/20">
                   {channel?.photoURL || user?.photoURL ? (
                     <Image 
@@ -225,7 +273,7 @@ const CreatorDashboardPage: React.FC = () => {
                       className="w-full h-full object-cover" 
                     />
                   ) : (
-                    <span className="text-3xl font-medium text-gray-400 group-hover:text-emerald-400 transition-colors">
+                    <span className="text-2xl sm:text-3xl font-medium text-gray-400 group-hover:text-emerald-400 transition-colors">
                       {(channel?.channelName || user?.displayName || "U").charAt(0).toUpperCase()}
                     </span>
                   )}
@@ -233,24 +281,24 @@ const CreatorDashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* User Info */}
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-medium text-white bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+            {/* User Info - Responsive */}
+            <div className="flex-1 text-center sm:text-left w-full">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-3 mb-2">
+                <h2 className="text-xl sm:text-2xl font-medium text-white bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                   {channel?.channelName || user?.displayName}
                 </h2>
                 <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-xs font-medium text-emerald-400 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all hover:scale-105 animate-pulse">
-                  <Crown className="w-3.5 h-3.5" /> Creator
+                  <Crown className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Creator
                 </span>
               </div>
 
-              <p className="text-sm text-gray-500 mb-6">Manage your content and analytics</p>
+              <p className="text-xs sm:text-sm text-gray-500 mb-4 sm:mb-6">Manage your content and analytics</p>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3">
+              {/* Action Buttons - Responsive stacking */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                 <GoLiveButton />
-                <Link href="/creator/dashboard/upload">
-                  <button className="px-5 py-2.5 bg-emerald-500 text-black text-sm font-medium rounded-lg hover:bg-emerald-400 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/50 cursor-pointer flex items-center gap-2">
+                <Link href="/creator/dashboard/upload" className="w-full sm:w-auto">
+                  <button className="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-emerald-500 text-black text-sm font-medium rounded-lg hover:bg-emerald-400 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/50 cursor-pointer flex items-center justify-center gap-2">
                     <Upload size={16} /> Upload Video
                   </button>
                 </Link>
@@ -258,66 +306,78 @@ const CreatorDashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-emerald-500/50 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 group">
+          {/* Stats Grid - Responsive */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8 sm:mb-10 md:mb-12">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 sm:p-5 md:p-6 hover:border-emerald-500/50 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 group">
               <div className="flex items-center gap-2 text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
                 <Eye className="w-4 h-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">Total Views</span>
               </div>
-              <p className="text-2xl font-medium text-white">{totalViews.toLocaleString()}</p>
+              <p className="text-xl sm:text-2xl font-medium text-white">{totalViews.toLocaleString()}</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-emerald-500/50 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 group">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 sm:p-5 md:p-6 hover:border-emerald-500/50 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 group">
               <div className="flex items-center gap-2 text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
                 <Users className="w-4 h-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">Subscribers</span>
               </div>
-              <p className="text-2xl font-medium text-white">{(channel?.subscribers || 0).toLocaleString()}</p>
+              <p className="text-xl sm:text-2xl font-medium text-white">{(channel?.subscriberCount || 0).toLocaleString()}</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-emerald-500/50 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 group">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 sm:p-5 md:p-6 hover:border-emerald-500/50 transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/10 group sm:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-2 text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
                 <VideoIcon className="w-4 h-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">Videos</span>
               </div>
-              <p className="text-2xl font-medium text-white">{videos.length.toLocaleString()}</p>
+              <p className="text-xl sm:text-2xl font-medium text-white">{videos.length.toLocaleString()}</p>
             </div>
           </div>
 
-          {/* Content Table */}
+          {/* Content Table/Cards - Responsive */}
           <div className="bg-gray-900/30 border border-gray-800 rounded-lg overflow-hidden">
-            <div className="p-6 border-b border-gray-800">
-              <h2 className="text-lg font-medium text-white">Your Content</h2>
+            <div className="p-4 sm:p-6 border-b border-gray-800">
+              <h2 className="text-base sm:text-lg font-medium text-white">Your Content</h2>
             </div>
             <div className="overflow-x-auto">
               {fetchError ? (
-                <div className="p-16 text-center">
+                <div className="p-8 sm:p-16 text-center">
                   <p className="text-red-400 text-sm">{fetchError}</p>
                 </div>
               ) : videos.length === 0 ? (
-                <div className="p-16 text-center">
-                  <VideoIcon className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                  <h3 className="text-base font-medium mb-2 text-white">No videos yet</h3>
-                  <p className="text-sm text-gray-500">Upload your first video to get started</p>
+                <div className="p-8 sm:p-16 text-center">
+                  <VideoIcon className="w-10 h-10 sm:w-12 sm:h-12 text-gray-700 mx-auto mb-4" />
+                  <h3 className="text-sm sm:text-base font-medium mb-2 text-white">No videos yet</h3>
+                  <p className="text-xs sm:text-sm text-gray-500">Upload your first video to get started</p>
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead className="text-xs text-gray-500 uppercase bg-gray-900/50 border-b border-gray-800">
-                    <tr>
-                      <th className="p-4 font-medium text-left">Video</th>
-                      <th className="p-4 font-medium text-left">Status</th>
-                      <th className="p-4 font-medium text-left hidden lg:table-cell">Date</th>
-                      <th className="p-4 font-medium text-left hidden sm:table-cell">Views</th>
-                      <th className="p-4 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <>
+                  {/* Desktop/Tablet Table View (hidden on mobile) */}
+                  <div className="hidden lg:block">
+                    <table className="w-full">
+                      <thead className="text-xs text-gray-500 uppercase bg-gray-900/50 border-b border-gray-800">
+                        <tr>
+                          <th className="p-3 md:p-4 font-medium text-left">Video</th>
+                          <th className="p-3 md:p-4 font-medium text-left">Status</th>
+                          <th className="p-3 md:p-4 font-medium text-left hidden lg:table-cell">Date</th>
+                          <th className="p-3 md:p-4 font-medium text-left hidden md:table-cell">Views</th>
+                          <th className="p-3 md:p-4 font-medium text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {videos.map((video) => (
+                          <VideoRow key={video.id} video={video} onEdit={() => openEditModal(video)} onDelete={() => openDeleteModal(video)} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card View */}
+                  <div className="block lg:hidden">
                     {videos.map((video) => (
-                      <VideoRow key={video.id} video={video} onEdit={() => openEditModal(video)} onDelete={() => openDeleteModal(video)} />
+                      <VideoCard key={video.id} video={video} onEdit={() => openEditModal(video)} onDelete={() => openDeleteModal(video)} />
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -335,6 +395,7 @@ const CreatorDashboardPage: React.FC = () => {
   );
 };
 
+// Desktop/Tablet Table Row Component
 const VideoRow: React.FC<{ video: Video; onEdit: () => void; onDelete: () => void }> = ({ video, onEdit, onDelete }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const createdAtDate = new Date(video.createdAt);
@@ -343,26 +404,26 @@ const VideoRow: React.FC<{ video: Video; onEdit: () => void; onDelete: () => voi
 
   return (
     <tr className="border-b border-gray-800 last:border-b-0 hover:bg-gray-900/50 transition-colors">
-      <td className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="w-24 h-14 bg-gray-800 rounded-md shrink-0 relative overflow-hidden border border-gray-700">
-            <AppImage src={video.thumbnailUrl || ""} alt={video.title} fallbackText="Thumb" />
+      <td className="p-3 md:p-4">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="w-20 h-12 sm:w-24 sm:h-14 bg-gray-800 rounded-md shrink-0 relative overflow-hidden border border-gray-700">
+            <AppImage key={video.id} src={video.thumbnailUrl || ""} alt={video.title} />
           </div>
-          <span className="font-medium text-white line-clamp-2 text-sm">{video.title}</span>
+          <span className="font-medium text-white line-clamp-2 text-xs sm:text-sm">{video.title}</span>
         </div>
       </td>
-      <td className="p-4">
+      <td className="p-3 md:p-4">
         <span
-          className={`px-2.5 py-1 rounded-md text-xs font-medium border ${
+          className={`px-2 py-1 rounded-md text-xs font-medium border ${
             visibility === "public" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-gray-500/10 text-gray-400 border-gray-500/20"
           }`}
         >
           {visibility.charAt(0).toUpperCase() + visibility.slice(1)}
         </span>
       </td>
-      <td className="p-4 text-gray-400 text-sm hidden lg:table-cell">{createdAtDate.toLocaleDateString()}</td>
-      <td className="p-4 text-gray-400 text-sm hidden sm:table-cell">{(video.views || 0).toLocaleString()}</td>
-      <td className="p-4 text-right relative">
+      <td className="p-3 md:p-4 text-gray-400 text-xs sm:text-sm hidden lg:table-cell">{createdAtDate.toLocaleDateString()}</td>
+      <td className="p-3 md:p-4 text-gray-400 text-xs sm:text-sm hidden md:table-cell">{(video.views || 0).toLocaleString()}</td>
+      <td className="p-3 md:p-4 text-right relative">
         <button
           ref={btnRef}
           onClick={() => setIsMenuOpen((s) => !s)}
@@ -383,6 +444,61 @@ const VideoRow: React.FC<{ video: Video; onEdit: () => void; onDelete: () => voi
         )}
       </td>
     </tr>
+  );
+};
+
+// Mobile Card Component
+const VideoCard: React.FC<{ video: Video; onEdit: () => void; onDelete: () => void }> = ({ video, onEdit, onDelete }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const createdAtDate = new Date(video.createdAt);
+  const visibility = video.visibility || "private";
+
+  return (
+    <div className="border-b border-gray-800 last:border-b-0 p-4 hover:bg-gray-900/50 transition-colors">
+      <div className="flex gap-3 mb-3">
+        <div className="w-32 h-20 bg-gray-800 rounded-md shrink-0 relative overflow-hidden border border-gray-700">
+          <AppImage key={video.id} src={video.thumbnailUrl || ""} alt={video.title} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-white text-sm line-clamp-2 mb-2">{video.title}</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                visibility === "public" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+              }`}
+            >
+              {visibility}
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1">
+            <Eye className="w-3 h-3" /> {(video.views || 0).toLocaleString()}
+          </span>
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3 h-3" /> {createdAtDate.toLocaleDateString()}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button 
+          onClick={onEdit}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+        >
+          <Edit2 size={14} /> Edit
+        </button>
+        <button 
+          onClick={onDelete}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors text-sm font-medium"
+        >
+          <Trash2 size={14} /> Delete
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -504,7 +620,7 @@ const EditVideoModal: React.FC<{
                   <div>
                     <label className="text-sm font-medium text-gray-400 mb-2 block">Thumbnail</label>
                     <div className="aspect-video w-1/2 bg-gray-800 rounded-lg relative group border border-gray-700 overflow-hidden">
-                      <AppImage src={thumbnailPreview || ""} alt="Thumbnail preview" fallbackText="Thumb" />
+                      <AppImage src={thumbnailPreview || ""} alt="Thumbnail preview" />
                       <button
                         type="button"
                         onClick={() => thumbnailInputRef.current?.click()}

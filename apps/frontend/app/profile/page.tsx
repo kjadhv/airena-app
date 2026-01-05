@@ -1,7 +1,6 @@
-// app/profile/page.tsx
 "use client";
 
-import React, { useState, useEffect, JSX } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -15,75 +14,44 @@ import {
   Edit2,
   Camera,
   Loader2,
-  Check,
-  X,
   LayoutDashboard,
+  Eye,
+  ThumbsUp,
+  MessageCircle,
+  Share2,
+  Clock,
+  X,
 } from "lucide-react";
+
 import { useAuth } from "@/app/context/AuthContext";
 import { db } from "@/app/firebase/config";
 import {
   doc,
   updateDoc,
   onSnapshot,
-  setDoc,
-  serverTimestamp,
   collection,
-  getDocs,
   query,
   where,
+  setDoc,
+  deleteDoc,
+  increment,
+  getDoc,
+  serverTimestamp,
+  getDocs,
+  orderBy,
+  limit,
+  Timestamp,
 } from "firebase/firestore";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
 
-// --- HELPER COMPONENT DEFINITIONS ---
+import { sendNewSubscriberNotification } from "@/app/utils/notifications/subscriptionNotificatons";
 
-interface StatCardProps { icon: React.ReactNode; label: string; value: string; }
-function StatCard({ icon, label, value }: StatCardProps): JSX.Element {
-  return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 group">
-      <div className="flex items-center gap-2 text-gray-500 mb-2 group-hover:text-emerald-400 transition-colors">
-        <div className="w-4 h-4">{icon}</div>
-        <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
-      </div>
-      <p className="text-2xl font-medium text-white">{value}</p>
-    </div>
-  );
-}
-
-interface DashboardCardProps { icon: React.ReactNode; title: string; description: string; href: string; buttonText: string; color: 'emerald' | 'blue' | 'red'; }
-function DashboardCard({ icon, title, description, href, buttonText, color }: DashboardCardProps): JSX.Element {
-  const colors = {
-    emerald: { border: "border-emerald-500/20", hoverBorder: "hover:border-emerald-500/40", shadow: "shadow-emerald-500/20", button: "bg-emerald-500 hover:bg-emerald-400" },
-    blue: { border: "border-blue-500/20", hoverBorder: "hover:border-blue-500/40", shadow: "shadow-blue-500/20", button: "bg-blue-500 hover:bg-blue-400" },
-    red: { border: "border-red-500/20", hoverBorder: "hover:border-red-500/40", shadow: "shadow-red-500/20", button: "bg-red-500 hover:bg-red-400" }
-  };
-  const c = colors[color];
-  return (
-    <div className={`relative bg-gradient-to-br from-gray-900/5 via-gray-900/10 to-gray-900/5 border ${c.border} rounded-lg p-8 overflow-hidden group ${c.hoverBorder} transition-all ${c.shadow} shadow-lg`}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-      <div className="relative flex flex-col sm:flex-row items-start justify-between sm:items-center">
-        <div>
-          <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-gray-800/50 rounded-lg">{icon}</div><h3 className="text-lg font-medium text-white">{title}</h3></div>
-          <p className="text-sm text-gray-400 mb-6 max-w-xl">{description}</p>
-        </div>
-        <Link href={href} className="flex-shrink-0 mt-4 sm:mt-0"><button className={`px-5 py-2.5 ${c.button} text-black text-sm font-medium rounded-lg transition-all hover:scale-105 shadow-lg`}>{buttonText}</button></Link>
-      </div>
-    </div>
-  );
-}
-
-interface TabContentProps { activeTab: 'overview' | 'activity' | 'following'; }
-function TabContent({ activeTab }: TabContentProps): JSX.Element | null {
-  const EmptyState = ({ icon, title, message }: { icon: React.ReactNode; title: string; message: string; }) => (
-    <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-16 text-center">
-      {icon}<h3 className="text-base font-medium mb-2 text-white">{title}</h3><p className="text-sm text-gray-500">{message}</p>
-    </div>
-  );
-  if (activeTab === "overview") return <EmptyState icon={<Video className="w-12 h-12 text-gray-700 mx-auto mb-4" />} title="No activity yet" message="Start watching streams to see your activity here" />;
-  if (activeTab === "activity") return <EmptyState icon={<Video className="w-12 h-12 text-gray-700 mx-auto mb-4" />} title="No watch history" message="Your watched streams will appear here" />;
-  if (activeTab === "following") return <EmptyState icon={<User className="w-12 h-12 text-gray-700 mx-auto mb-4" />} title="Not following anyone" message="Follow creators to see them here" />;
-  return null;
-}
-
-// --- MAIN PROFILE PAGE COMPONENT ---
+/* ================= TYPES ================= */
 
 interface UserProfile {
   uid: string;
@@ -96,226 +64,917 @@ interface UserProfile {
 }
 
 interface UserStats {
-  watchTime: number; // Total seconds watching videos
-  videosUploaded: number; // Videos uploaded by THIS user
-  followedCreators: number;
+  watchTime: number;
+  videosUploaded: number;
+  followers: number;
   joinDate: string;
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalShares: number;
 }
 
-export default function ProfilePage(): JSX.Element {
-  const { 
-    user: authUser, 
+interface ActivityVideo {
+  id: string;
+  title: string;
+  watchedAt: string;
+  authorName?: string;
+}
+interface FollowingUser {
+  uid: string;
+  displayName: string;
+  photoURL: string | null;
+}
+interface TopVideo {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  views: number;
+}
+interface WatchLaterVideo {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  authorName: string;
+  addedAt: string;
+}
+/* ================= MAIN PAGE ================= */
+
+export default function ProfilePage({
+  profileUserId,
+}: {
+  profileUserId?: string;
+}) {
+
+  const {
+    user: authUser,
     loading: authLoading,
     isCreator,
     isBlogAdmin,
     isSuperAdmin,
   } = useAuth();
-
+  const userId = profileUserId || authUser?.uid;
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "activity" | "following">("overview");
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [newBio, setNewBio] = useState<string>("");
+  const [stats, setStats] = useState<UserStats>({
+    watchTime: 0,
+    videosUploaded: 0,
+    followers: 0,
+    joinDate: "",
+    totalViews: 0,
+    totalLikes: 0,
+    totalComments: 0,
+    totalShares: 0,
+  });
+  const [topVideos, setTopVideos] = useState<TopVideo[]>([]);
+  const [watchLaterVideos, setWatchLaterVideos] = useState<WatchLaterVideo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [watchLaterLoading, setWatchLaterLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newBio, setNewBio] = useState("");
+  const [activeTab, setActiveTab] =
+    useState<"overview" | "activity" | "following">("overview");
 
-  // Fetch real stats from Firebase
+  /* ===== ACTIVITY ===== */
+  const [activityHistory, setActivityHistory] = useState<ActivityVideo[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [following, setFollowing] = useState<FollowingUser[]>([]);
+  const [followingLoading, setFollowingLoading] = useState(false);
+  
+  /* ================= USER + CHANNEL ================= */
+
   useEffect(() => {
-    if (authUser) {
-      const userRef = doc(db, "users", authUser.uid);
-      const unsubscribe = onSnapshot(userRef, async (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setUser({
-            uid: authUser.uid,
-            displayName: authUser.displayName || "Unnamed User",
-            email: authUser.email || "No email provided",
-            photoURL: authUser.photoURL,
-            isCreator: data.isCreator || false,
-            isAdmin: data.isAdmin || false,
-            bio: data.bio || "Welcome to my profile!",
-          });
-          setNewBio(data.bio || "");
-
-          // Get watch time in SECONDS from Firebase
-          const totalWatchTimeSeconds = data.stats?.totalWatchTimeSeconds || 0;
-
-          // ✅ NEW: Count videos UPLOADED by this user
-          const videosQuery = query(
-            collection(db, "videos"),
-            where("authorId", "==", authUser.uid)
-          );
-          const videosSnapshot = await getDocs(videosQuery);
-          const videosUploaded = videosSnapshot.size;
-
-          setStats({
-            watchTime: totalWatchTimeSeconds,
-            videosUploaded: videosUploaded, // Changed from streamsWatched
-            followedCreators: 0, // TODO: Implement later
-            joinDate: authUser.metadata.creationTime || new Date().toISOString(),
-          });
-        } else {
-          // Create user document if doesn't exist
-          await setDoc(userRef, {
-            uid: authUser.uid,
-            displayName: authUser.displayName || "Unnamed User",
-            email: authUser.email || "No email provided",
-            photoURL: authUser.photoURL || null,
-            isCreator: false,
-            isAdmin: false,
-            bio: "Welcome to my profile!",
-            createdAt: serverTimestamp(),
-            stats: {
-              totalWatchTimeSeconds: 0,
-            }
-          });
-          
-          setStats({
-            watchTime: 0,
-            videosUploaded: 0,
-            followedCreators: 0,
-            joinDate: authUser.metadata.creationTime || new Date().toISOString(),
-          });
-        }
-        setLoading(false);
-      });
-      return () => unsubscribe();
-    } else if (!authLoading) {
+    if (authLoading) return;
+    if (!userId) {
       setLoading(false);
+      return;
     }
-  }, [authUser, authLoading]);
 
-  const handleSaveBio = async () => {
-    if (!authUser || !user) return;
+    const unsubUser = onSnapshot(doc(db, "users", userId), (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+
+      setUser({
+        uid: userId,
+        displayName: d.displayName || "User",
+        email: d.email || "",
+        photoURL: d.photoURL || null,
+        isCreator: d.isCreator || false,
+        isAdmin: d.isAdmin || false,
+        bio: d.bio || "",
+      });
+
+      setStats((p) => ({
+        ...p,
+        watchTime: d.watchTime || 0,
+        joinDate:
+          d.createdAt?.toDate().toISOString() ??
+          new Date().toISOString(),
+      }));
+
+      setLoading(false);
+    });
+
+    const unsubChannel = onSnapshot(
+      doc(db, "channels", userId),
+      (snap) => {
+        setStats((p) => ({
+          ...p,
+          followers: snap.exists()
+            ? snap.data()?.subscriberCount || 0
+            : 0,
+        }));
+      }
+    );
+
+    return () => {
+      unsubUser();
+      unsubChannel();
+    };
+  }, [userId, authLoading]);
+
+  /* ================= VIDEO STATS & COUNT ================= */
+
+  useEffect(() => {
+    if (!authUser) {
+      setStatsLoading(false);
+      return;
+    }
+
+    // Simple query without orderBy to avoid index requirement
+    const q = query(
+      collection(db, "videos"),
+      where("authorId", "==", userId)
+    );
+
+    const unsub = onSnapshot(q, async (snap) => {
+      try {
+        // If no videos, set to 0
+        if (snap.empty) {
+          setStats((p) => ({
+            ...p,
+            videosUploaded: 0,
+            totalViews: 0,
+            totalLikes: 0,
+            totalComments: 0,
+            totalShares: 0,
+          }));
+          setTopVideos([]);
+          setStatsLoading(false);
+          return;
+        }
+
+        let views = 0;
+        let likes = 0;
+        let comments = 0;
+        let shares = 0;
+
+        // Sort videos by views in memory
+        const sortedDocs = snap.docs.sort((a, b) => {
+          const aViews = a.data().views || 0;
+          const bViews = b.data().views || 0;
+          return bViews - aViews;
+        });
+
+        const top: TopVideo[] = [];
+
+        // Process all videos
+        const commentPromises = sortedDocs.map(async (docSnap) => {
+          const d = docSnap.data();
+
+          views += d.views || 0;
+          likes += d.reactions?.likes || 0;
+          shares += d.shares || 0;
+
+          if (top.length < 2) {
+            top.push({
+              id: docSnap.id,
+              title: d.title,
+              thumbnailUrl: d.thumbnailUrl,
+              views: d.views || 0,
+            });
+          }
+
+          // Get comment count
+          const commentsSnap = await getDocs(
+            collection(db, "videos", docSnap.id, "comments")
+          );
+          return commentsSnap.size;
+        });
+
+        // Wait for all comment counts
+        const commentCounts = await Promise.all(commentPromises);
+        comments = commentCounts.reduce((sum, count) => sum + count, 0);
+
+        // Update all stats at once
+        setStats((p) => ({
+          ...p,
+          videosUploaded: snap.size,
+          totalViews: views,
+          totalLikes: likes,
+          totalComments: comments,
+          totalShares: shares,
+        }));
+
+        setTopVideos(top);
+        setStatsLoading(false);
+      } catch (error) {
+        console.error("Error loading video stats:", error);
+        setStatsLoading(false);
+      }
+    });
+
+    return () => unsub();
+  }, [userId]);
+
+  
+  /* ================= WATCH LATER ================= */
+
+  useEffect(() => {
+    if (!authUser) {
+      setWatchLaterLoading(false);
+      return;
+    }
+
+    const fetchWatchLater = async () => {
+      try {
+        setWatchLaterLoading(true);
+
+        const q = query(
+          collection(db, "users", authUser.uid, "watchLater"),
+          orderBy("addedAt", "desc"),
+          limit(10)
+        );
+
+        const snap = await getDocs(q);
+
+        const videos = snap.docs.map((doc) => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            title: d.title || "Unknown video",
+            thumbnailUrl: d.thumbnailUrl || "",
+            authorName: d.authorName || "Unknown",
+            addedAt:
+              d.addedAt instanceof Timestamp
+                ? d.addedAt.toDate().toLocaleString()
+                : "",
+          };
+        });
+
+        setWatchLaterVideos(videos);
+      } catch (e) {
+        console.error("Failed to load watch later", e);
+      } finally {
+        setWatchLaterLoading(false);
+      }
+    };
+
+    fetchWatchLater();
+  }, [authUser]);
+
+  const handleRemoveFromWatchLater = async (videoId: string) => {
+    if (!authUser) return;
+
     try {
-      const userRef = doc(db, "users", authUser.uid);
-      await updateDoc(userRef, { bio: newBio });
-      setUser({ ...user, bio: newBio });
-      setIsEditing(false);
+      await deleteDoc(doc(db, "users", authUser.uid, "watchLater", videoId));
+      setWatchLaterVideos((prev) => prev.filter((v) => v.id !== videoId));
     } catch (error) {
-      console.error("Error saving bio:", error);
+      console.error("Error removing from watch later:", error);
+      alert("Failed to remove video. Please try again.");
     }
   };
+  /* ================= ACTIVITY HISTORY ================= */
 
-  // Smart format function that shows seconds when needed
-  const formatWatchTime = (totalSeconds: number): string => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+  useEffect(() => {
+    if (!authUser || activeTab !== "activity") {
+      setActivityLoading(false);
+      return;
+    }
+
+    const fetchHistory = async () => {
+      try {
+        setActivityLoading(true);
+
+        const q = query(
+          collection(db, "users", authUser.uid, "watchHistory"),
+          orderBy("lastWatched", "desc"),
+          limit(20)
+        );
+
+        const snap = await getDocs(q);
+
+        const history = snap.docs.map((doc) => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            title: d.title || "Unknown video",
+            watchedAt:
+              d.lastWatched instanceof Timestamp
+                ? d.lastWatched.toDate().toLocaleString()
+                : "",
+            authorName: d.authorName || "Unknown",
+          };
+        });
+
+        setActivityHistory(history);
+      } catch (e) {
+        console.error("Failed to load activity history", e);
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [authUser, activeTab]);
+
+  /* ================= FOLLOWING ================= */
+
+  useEffect(() => {
+    if (!authUser || activeTab !== "following") return;
+
+    const fetchFollowing = async () => {
+      setFollowingLoading(true);
+
+      const snap = await getDocs(
+        collection(db, "users", authUser.uid, "following")
+      );
+
+      const users = await Promise.all(
+        snap.docs.map(async (d) => {
+          const u = await getDoc(doc(db, "users", d.id));
+          if (!u.exists()) return null;
+          return {
+            uid: d.id,
+            displayName: u.data().displayName || "User",
+            photoURL: u.data().photoURL || null,
+          };
+        })
+      );
+
+      setFollowing(users.filter(Boolean) as FollowingUser[]);
+      setFollowingLoading(false);
+    };
+
+    fetchFollowing();
+  }, [authUser, activeTab]);
+  
+  /* ================= PROFILE PHOTO UPLOAD ================= */
+
+  const handleProfilePhotoChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (!authUser || !e.target.files?.[0]) return;
+
+    const file = e.target.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image must be under 5MB");
+      return;
+    }
+
+    setUploadingPhoto(true);
+
+    try {
+      const storage = getStorage();
+      const ext = file.name.split(".").pop() || "jpg";
+      const timestamp = Date.now();
+      const refPath = ref(storage, `profile-photos/${authUser.uid}.${timestamp}.${ext}`);
+
+      await uploadBytes(refPath, file);
+      const url = await getDownloadURL(refPath);
+
+      await updateDoc(doc(db, "users", authUser.uid), { photoURL: url });
+      await updateDoc(doc(db, "channels", authUser.uid), { photoURL: url });
     
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    } else {
-      return `${seconds}s`;
+       // IMPORTANT: Also update all existing videos by this author
+    const videosQuery = query(
+      collection(db, "videos"),
+      where("authorId", "==", authUser.uid)
+    );
+    
+    const videosSnapshot = await getDocs(videosQuery);
+    const updatePromises = videosSnapshot.docs.map((videoDoc) =>
+      updateDoc(doc(db, "videos", videoDoc.id), { authorPhotoURL: url })
+    );
+    
+    await Promise.all(updatePromises);
+
+  } catch (error) {
+    console.error("Error uploading photo:", error);
+    alert("Failed to upload photo. Please try again.");
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = "";
     }
   };
 
-  const formatJoinDate = (dateString: string): string => new Date(dateString).toLocaleDateString("en-US", { year: "numeric", month: "long" });
+  /* ================= BIO ================= */
+
+  const saveBio = async () => {
+    if (!authUser) return;
+    await updateDoc(doc(db, "users", authUser.uid), { bio: newBio });
+    setIsEditing(false);
+  };
+
+  /* ================= LOAD STATES ================= */
 
   if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+        <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
       </div>
     );
   }
 
   if (!authUser || !user) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-white text-lg">You must be logged in to view this page.</p>
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+        Login required
       </div>
     );
   }
 
+  /* ================= UI ================= */
+
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="border-b border-gray-900 bg-gradient-to-r from-gray-950 via-emerald-950/10 to-gray-950">
-        <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
-          <h1 className="text-lg font-medium text-white tracking-tight">Profile</h1>
-         <Link href="/settings">
-  <button className="p-2 hover:bg-gray-900 rounded-lg transition-all">
-    <Settings className="w-5 h-5 text-gray-400" />
-  </button>
-</Link>
+      {/* HEADER */}
+      <div className="border-b border-gray-900">
+        <div className="max-w-5xl mx-auto px-6 py-6 flex justify-between">
+          <h1 className="text-lg font-medium">Profile</h1>
+          <Link href="/settings">
+            <Settings className="w-5 h-5 text-gray-400 hover:text-white" />
+          </Link>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-12">
-        <div className="flex items-start gap-8 mb-12">
+        {/* PROFILE */}
+        <div className="flex gap-8 mb-10">
+          {/* Profile Picture with Neon Glow */}
           <div className="relative group flex-shrink-0">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 blur-xl opacity-60 group-hover:opacity-80 transition-opacity animate-pulse"></div>
-            <div className="relative w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 p-1 shadow-[0_0_30px_rgba(16,185,129,0.6)]">
-              <div className="w-full h-full rounded-full bg-gray-900 flex items-center justify-center overflow-hidden">
-                {user.photoURL ? ( <Image
-  src={user.photoURL}
-  alt={user.displayName}
-  fill
-  sizes="112px"
-  className="object-cover"
-/>
-) : (
-                  <span className="text-3xl font-medium text-gray-400">{user.displayName?.charAt(0).toUpperCase()}</span>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-400 via-green-400 to-emerald-500 blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-300 animate-pulse"></div>
+            
+            <div className="relative w-28 h-28 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 p-1 shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:shadow-[0_0_50px_rgba(16,185,129,0.9)] transition-all duration-300 group-hover:scale-105">
+              <div className="w-full h-full rounded-full bg-gray-900 flex items-center justify-center overflow-hidden ring-2 ring-emerald-400/20">
+                {user.photoURL ? (
+                  <Image 
+                    src={user.photoURL} 
+                    alt={user.displayName} 
+                    fill 
+                    className="object-cover" 
+                    key={user.photoURL} // Add this key prop to force re-render
+          unoptimized // Add this to bypass Next.js caching
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-3xl text-gray-400 group-hover:text-emerald-400 transition-colors">
+                    {user.displayName[0]}
+                  </div>
                 )}
               </div>
             </div>
-            <button className="absolute bottom-0 right-0 p-1.5 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-all opacity-0 group-hover:opacity-100"><Camera className="w-3.5 h-3.5 text-white" /></button>
+
+            <button
+              onClick={() => document.getElementById('profile-photo-input')?.click()}
+              disabled={uploadingPhoto}
+              className="absolute bottom-0 right-0 w-9 h-9 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-gray-900 hover:bg-emerald-400 transition-all hover:scale-110 shadow-lg hover:shadow-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              aria-label="Upload profile photo"
+            >
+              {uploadingPhoto ? (
+                <Loader2 className="w-4 h-4 text-black animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4 text-black" />
+              )}
+            </button>
+
+            <input
+              id="profile-photo-input"
+              type="file"
+              accept="image/png, image/jpeg, image/jpg, image/webp"
+              onChange={handleProfilePhotoChange}
+              className="hidden"
+            />
           </div>
 
+          {/* User Info */}
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-2xl font-medium bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">{user.displayName}</h2>
-              {isSuperAdmin && <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 border border-red-500/20 rounded-md text-xs font-medium text-red-400"><Shield className="w-3.5 h-3.5" /> Super Admin</span>}
-              {isCreator && <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-xs font-medium text-emerald-400"><Crown className="w-3.5 h-3.5" /> Creator</span>}
-            </div>
-            <p className="text-sm text-gray-500 mb-6">{user.email}</p>
+            <h2 className="text-2xl font-medium">{user.displayName}</h2>
+            <p className="text-gray-400 text-sm">{user.email}</p>
+
             {!isEditing ? (
-              <div className="group flex items-start gap-3">
-                <p className="text-sm text-gray-300 leading-relaxed max-w-2xl">{user.bio || "No bio yet."}</p>
-                <button onClick={() => setIsEditing(true)} className="p-1.5 hover:bg-gray-900 rounded transition opacity-0 group-hover:opacity-100"><Edit2 className="w-3.5 h-3.5 text-gray-500" /></button>
-              </div>
+              <p className="mt-3 text-gray-300">{user.bio || "No bio yet."}</p>
             ) : (
-              <div className="max-w-2xl">
-                <textarea value={newBio} onChange={(e) => setNewBio(e.target.value)} className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm" rows={3} />
-                <div className="flex gap-2 mt-3">
-                  <button onClick={handleSaveBio} className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-gray-100 flex items-center gap-2"><Check className="w-4 h-4" /> Save</button>
-                  <button onClick={() => { setIsEditing(false); setNewBio(user.bio); }} className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 flex items-center gap-2"><X className="w-4 h-4" /> Cancel</button>
-                </div>
-              </div>
+              <textarea
+                value={newBio}
+                onChange={(e) => setNewBio(e.target.value)}
+                placeholder="Tell us about yourself..."
+                className="w-full bg-gray-900 border border-gray-800 p-3 rounded-lg mt-3 text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all resize-none"
+                rows={3}
+              />
             )}
+
+            <div className="mt-3">
+              {!isEditing ? (
+                <button 
+                  onClick={() => {
+                    setIsEditing(true);
+                    setNewBio(user.bio || "");
+                  }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  <span className="text-sm">Edit bio</span>
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveBio}
+                    className="px-4 py-2 bg-emerald-500 text-black rounded-lg hover:bg-emerald-400 transition-all text-sm font-medium"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-all text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+ 
+        {/* SUBSCRIBE */}
+        <SubscribeButton
+          channelOwnerId={user.uid}
+          channelName={user.displayName}
+          currentUserId={authUser.uid}
+          currentUserName={authUser.displayName || ""}
+          currentUserPhoto={authUser.photoURL}
+        />
 
-        {stats && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-            <StatCard icon={<Video />} label="Watch Time" value={formatWatchTime(stats.watchTime)} />
-            <StatCard icon={<Award />} label="Videos Uploaded" value={stats.videosUploaded.toString()} />
-            <StatCard icon={<User />} label="Following" value={stats.followedCreators.toString()} />
-            <StatCard icon={<Calendar />} label="Joined" value={formatJoinDate(stats.joinDate)} />
-          </div>
-        }
+        {/* STATS */}
+        <div className="grid grid-cols-4 gap-4 my-10">
+          <StatCard icon={<Video />} label="Watch Time" value="—" />
+          <StatCard
+            icon={<Award />}
+            label="Videos"
+            value={stats.videosUploaded.toString()}
+          />
+          <StatCard icon={<User />} label="Followers" value={stats.followers.toString()} />
+          <StatCard
+            icon={<Calendar />}
+            label="Joined"
+            value={new Date(stats.joinDate).toLocaleDateString()}
+          />
+        </div>
 
+        {/* DASHBOARDS */}
         {(isSuperAdmin || isBlogAdmin || isCreator) && (
-          <div className="space-y-6 mb-12">
-            <h3 className="text-lg font-medium text-gray-400 tracking-tight">Dashboards & Tools</h3>
-            {isSuperAdmin && <DashboardCard icon={<Shield className="w-5 h-5 text-red-400" />} title="Super Admin Dashboard" description="Access all administrative tools and manage the entire platform." href="/admin/dashboard" buttonText="Go to Admin Panel" color="red" />}
-            {isBlogAdmin && !isSuperAdmin && <DashboardCard icon={<LayoutDashboard className="w-5 h-5 text-blue-400" />} title="Blog Admin Dashboard" description="Manage blog posts, review submissions, and moderate content." href="/blogs" buttonText="Go to Blog Panel" color="blue" />}
-            {isCreator && !isSuperAdmin && <DashboardCard icon={<Crown className="w-5 h-5 text-emerald-400" />} title="Creator Dashboard" description="Access your streaming tools, analytics, and manage your content." href="/creator/dashboard" buttonText="Go to Dashboard" color="emerald" />}
+          <div className="space-y-4 mb-12">
+            {isSuperAdmin && (
+              <DashboardCard
+                icon={<Shield />}
+                title="Super Admin Dashboard"
+                href="/admin/dashboard"
+              />
+            )}
+            {isBlogAdmin && (
+              <DashboardCard
+                icon={<LayoutDashboard />}
+                title="Blog Admin Dashboard"
+                href="/blogs"
+              />
+            )}
+            {isCreator && (
+              <DashboardCard
+                icon={<Crown />}
+                title="Creator Dashboard"
+                href="/creator/dashboard"
+              />
+            )}
           </div>
         )}
 
-        <div className="border-b border-gray-800 mb-8">
-          <div className="flex gap-8">
-            {(["overview", "activity", "following"] as const).map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-4 text-sm font-medium capitalize transition-all relative ${activeTab === tab ? "text-white" : "text-gray-500 hover:text-gray-300"}`}>
-                {tab}
-                {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>}
-              </button>
-            ))}
-          </div>
+        {/* TABS */}
+        <div className="border-b border-gray-800 mb-6 flex gap-6">
+          {(["overview", "activity", "following"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`pb-3 capitalize ${
+                activeTab === t
+                  ? "text-white border-b-2 border-emerald-500"
+                  : "text-gray-400"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
         </div>
-        <TabContent activeTab={activeTab} />
+
+        {/* TAB CONTENT */}
+        {activeTab === "overview" && (
+          <div className="space-y-10">
+            {/* ANALYTICS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard 
+                icon={<Eye />} 
+                label="Views" 
+                value={statsLoading ? "—" : stats.totalViews.toString()} 
+              />
+              <StatCard 
+                icon={<ThumbsUp />} 
+                label="Likes" 
+                value={statsLoading ? "—" : stats.totalLikes.toString()} 
+              />
+              <StatCard 
+                icon={<MessageCircle />} 
+                label="Comments" 
+                value={statsLoading ? "—" : stats.totalComments.toString()} 
+              />
+              <StatCard 
+                icon={<Share2 />} 
+                label="Shares" 
+                value={statsLoading ? "—" : stats.totalShares.toString()} 
+              />
+            </div>
+
+            {/* DERIVED METRICS */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <StatCard
+                icon={<Video />}
+                label="Avg Views / Video"
+                value={
+                  statsLoading 
+                    ? "—"
+                    : stats.videosUploaded > 0
+                    ? Math.round(stats.totalViews / stats.videosUploaded).toString()
+                    : "0"
+                }
+              />
+              <StatCard
+                icon={<Award />}
+                label="Engagement Rate"
+                value={
+                  statsLoading 
+                    ? "—"
+                    : stats.totalViews > 0
+                    ? (
+                        ((stats.totalLikes + stats.totalComments) /
+                          stats.totalViews) *
+                        100
+                      ).toFixed(1) + "%"
+                    : "0%"
+                }
+              />
+              <StatCard
+                icon={<User />}
+                label="Subscribers"
+                value={stats.followers.toString()}
+              />
+            </div>
+
+            {/* TOP VIDEOS */}
+            <div>
+              <h3 className="text-lg font-medium mb-4">Top Videos</h3>
+
+              {statsLoading ? (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Loading videos...</span>
+                </div>
+              ) : topVideos.length === 0 ? (
+                <p className="text-gray-500">No videos uploaded yet</p>
+              ) : (
+                <div className="grid md:grid-cols-5 gap-4">
+                  {topVideos.map((v) => (
+                    <Link
+                      key={v.id}
+                      href={`/watch/${v.id}`}
+                      className="bg-gray-900 rounded overflow-hidden hover:bg-gray-800 transition"
+                    >
+                      <Image
+                        src={v.thumbnailUrl}
+                        alt={v.title}
+                        width={600}
+                        height={340}
+                        className="w-full h-40 object-cover"
+                      />
+                      <div className="p-4">
+                        <p className="font-medium">{v.title}</p>
+                        <p className="text-sm text-gray-400">
+                          {v.views.toLocaleString()} views
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+        </div>
+
+            {/* WATCH LATER */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Clock className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-lg font-medium">Watch Later</h3>
+              </div>
+
+              {watchLaterLoading ? (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Loading videos...</span>
+                </div>
+              ) : watchLaterVideos.length === 0 ? (
+                <p className="text-gray-500">No videos saved to watch later</p>
+              ) : (
+                <div className="grid md:grid-cols-5 gap-4">
+                  {watchLaterVideos.map((v) => (
+                    <div
+                      key={v.id}
+                      className="bg-gray-900 rounded overflow-hidden hover:bg-gray-800 transition relative group"
+                    >
+                      <Link href={`/watch/player?v=${v.id}`}>
+                        <Image
+                          src={v.thumbnailUrl || "/placeholder.jpg"}
+                          alt={v.title}
+                          width={600}
+                          height={340}
+                          className="w-full h-40 object-cover"
+                        />
+                        <div className="p-4">
+                          <p className="font-medium">{v.title}</p>
+                          <p className="text-sm text-gray-400">{v.authorName}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Added {v.addedAt}
+                          </p>
+                        </div>
+                      </Link>
+                      <button
+                        onClick={() => handleRemoveFromWatchLater(v.id)}
+                        className="absolute top-2 right-2 p-2 bg-black/70 hover:bg-red-600 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                        title="Remove from Watch Later"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+         {activeTab === "activity" && (
+           <>
+             {activityLoading && (
+               <p className="text-sm text-gray-400">Loading activity…</p>
+             )}
+
+             {!activityLoading && activityHistory.length === 0 && (
+               <p className="text-sm text-gray-500">No watch history yet.</p>
+             )}
+
+             <ul className="space-y-2 max-h-80 overflow-y-auto">
+               {activityHistory.map((v) => (
+                 <li key={v.id} className="bg-gray-900/50 px-3 py-2 rounded-md">
+                   <div className="text-sm text-gray-200">{v.title}</div>
+                   <div className="text-xs text-gray-500">
+                     Watched on {v.watchedAt}
+                     {v.authorName && ` • ${v.authorName}`}
+                   </div>
+                 </li>
+               ))}
+             </ul>
+           </>
+         )}
+
+         {activeTab === "following" && (
+           <>
+             {followingLoading && (
+               <p className="text-sm text-gray-400">Loading…</p>
+             )}
+
+             {!followingLoading && following.length === 0 && (
+               <p className="text-gray-500">Not following anyone</p>
+             )}
+
+             <div className="grid sm:grid-cols-2 gap-4">
+               {following.map((u) => (
+                <Link
+                   key={u.uid}
+                   href={`/profile/${u.uid}`}
+                   className="flex items-center gap-4 bg-gray-900 p-4 rounded hover:bg-gray-800 transition"
+                 >
+                   <Image
+                     src={u.photoURL || "/avatar.png"}
+                     alt={u.displayName}
+                     width={40}
+                     height={40}
+                     className="rounded-full"
+                  />
+                   <span>{u.displayName}</span>
+                 </Link>
+               ))}
+             </div>
+           </>
+         )}
+</div></div>);}
+/* ================= STAT CARD components ================= */
+function DashboardCard({
+  icon,
+  title,
+  href,
+}: {
+    icon: React.ReactNode;
+  title: string;
+  href: string;
+}) {
+  return (
+    <Link href={href}>
+      <div className="bg-gray-900 p-6 rounded flex gap-4 hover:bg-gray-800 transition-colors">
+        {icon}
+        <span>{title}</span>
       </div>
+    </Link>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="bg-gray-900 p-4 rounded">
+      <div className="text-gray-400 text-sm flex gap-2 items-center">
+        {icon}
+        {label}
+      </div>
+      <div className="text-2xl mt-1">{value}</div>
     </div>
+  );
+}
+
+/* ================= SUBSCRIBE BUTTON ================= */
+
+function SubscribeButton({
+  channelOwnerId,
+  channelName,
+  currentUserId,
+  currentUserName,
+  currentUserPhoto,
+}: any) {
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  if (currentUserId === channelOwnerId) return null;
+
+  useEffect(() => {
+    const ref = doc(db, `users/${currentUserId}/following`, channelOwnerId);
+    getDoc(ref).then((d) => setIsSubscribed(d.exists()));
+  }, [currentUserId, channelOwnerId]);
+
+  const toggle = async () => {
+    setLoading(true);
+    const followRef = doc(db, `users/${currentUserId}/following`, channelOwnerId);
+    const channelRef = doc(db, "channels", channelOwnerId);
+
+    if (isSubscribed) {
+      await deleteDoc(followRef);
+      await updateDoc(channelRef, { subscriberCount: increment(-1) });
+    } else {
+      await setDoc(followRef, {
+        followedAt: serverTimestamp(),
+        notificationPreference: "all",
+      });
+      await updateDoc(channelRef, { subscriberCount: increment(1) });
+
+      await sendNewSubscriberNotification({
+        recipientId: channelOwnerId,
+        subscriberUserId: currentUserId,
+        subscriberName: currentUserName,
+        subscriberPhotoURL: currentUserPhoto,
+        channelName,
+      });
+    }
+
+    setIsSubscribed(!isSubscribed);
+    setLoading(false);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={loading}
+      className="px-6 py-2 bg-emerald-600 rounded mb-8 hover:bg-emerald-500 transition-colors disabled:opacity-50"
+    >
+      {loading ? "Loading..." : isSubscribed ? "Subscribed" : "Subscribe"}
+    </button>
   );
 }

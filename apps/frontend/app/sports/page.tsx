@@ -29,6 +29,7 @@ interface Content {
   thumbnailUrl: string;
   tags: string[];
   duration: number;
+  authorId: string;
 }
 
 // Sports categories based on your CATEGORIES definition
@@ -156,7 +157,11 @@ const VideoCard = ({ content }: { content: Content }) => {
         </div>
 
         <div className="flex items-start gap-3 mt-3">
-          <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
+          <UserAvatar
+  userId={content.authorId}
+  alt={content.authorName}
+  size={38}
+/>
           <div className="flex-1">
             <h3 className="font-semibold text-white line-clamp-2 leading-tight">{content.title}</h3>
             <p className="text-sm text-gray-400">{content.authorName}</p>
@@ -227,6 +232,7 @@ const SportsContent = () => {
               createdAt,
               title: d.title || "Untitled",
               description: d.description || "",
+              authorId: d.authorId || "", 
               authorName: d.authorName || "Unknown",
               authorPhotoURL: d.authorPhotoURL || null,
               views: d.views || 0,

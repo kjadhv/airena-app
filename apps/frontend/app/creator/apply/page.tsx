@@ -78,7 +78,7 @@ const ApplyCreatorPage = () => {
                     <h2 className="text-2xl font-bold text-emerald-400">You&apos;re Already a Creator!</h2>
                     {/* -------------------- */}
                     <p className="text-gray-400 mt-2">You can start uploading content from your dashboard.</p>
-                    <Link href="/dashboard" className="mt-6 inline-block bg-emerald-500 text-white px-6 py-2 rounded-lg font-semibold">Go to Dashboard</Link>
+                    <Link href="/creator/dashboard" className="mt-6 inline-block bg-emerald-500 text-white px-6 py-2 rounded-lg font-semibold">Go to Dashboard</Link>
                 </div>
             );
         }

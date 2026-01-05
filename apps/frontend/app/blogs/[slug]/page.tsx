@@ -348,13 +348,13 @@ export default function BlogPostPage() {
           {post.imageUrl ? (
             <div className="relative w-full h-[55vh] md:h-[65vh] overflow-hidden">
               <Image
-                src={post.imageUrl}
-                alt={post.title}
-                fill
-                className="object-cover"
-                priority
-                sizes="100vw"
-              />
+    src={post.imageUrl}
+    alt={post.title}
+    fill
+    className="object-cover object-top"
+    priority
+    sizes="100vw"
+  />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
               <div className="absolute bottom-0 inset-x-0 p-6 md:p-12">
                 <div className="max-w-4xl mx-auto text-center">

@@ -7,7 +7,6 @@ import "./global.css";
 import { AuthProvider } from "./context/AuthContext";
 import { SearchProvider } from "./context/SearchContext";
 import { LanguageProvider } from "@/app/context/LanguageContext";
-
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import AuthModal from "./components/AuthModal";
@@ -23,7 +22,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Mouse glow effect (unchanged)
+  // Mouse glow effect
   useEffect(() => {
     const isDesktop = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     if (isDesktop) {
@@ -39,7 +38,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <head>
-        {/* Apply theme before hydration */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -60,25 +58,24 @@ export default function RootLayout({
       </head>
 
       <body className="bg-white text-black dark:bg-black dark:text-slate-100 antialiased">
-        {/* 🔥 GLOBAL TIME TRACKER */}
         <GlobalTimeTracker />
 
         <AuthProvider>
           <LanguageProvider>
-            <SearchProvider>
-              <div className="relative min-h-screen">
-                <Sidebar />
+              <SearchProvider>
+                <div className="relative min-h-screen">
+                  <Sidebar />
 
-                <div className="relative min-h-screen flex flex-col">
-                  <TopBar />
-                  <main className="relative flex-1 w-full">
-                    {children}
-                  </main>
+                  <div className="relative min-h-screen flex flex-col">
+                    <TopBar />
+                    <main className="relative flex-1 w-full">
+                      {children}
+                    </main>
+                  </div>
+
+                  <AuthModal />
                 </div>
-
-                <AuthModal />
-              </div>
-            </SearchProvider>
+              </SearchProvider>
           </LanguageProvider>
         </AuthProvider>
       </body>

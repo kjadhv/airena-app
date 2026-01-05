@@ -25,6 +25,7 @@ interface Content {
   createdAt: Date;
   authorName: string;
   authorPhotoURL: string | null;
+  authorId: string; // ← ADD THIS LINE
   views: number;
   videoUrl: string;
   thumbnailUrl: string;
@@ -195,7 +196,11 @@ const VideoCard = ({ content }: { content: Content }) => {
           <PlayCircle className="absolute inset-0 m-auto w-12 h-12 text-white/40 group-hover:text-white transition duration-300 opacity-0 group-hover:opacity-100" />
         </div>
         <div className="flex items-start gap-3 mt-3">
-          <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
+          <UserAvatar
+  userId={content.authorId}
+  alt={content.authorName}
+  size={38}
+/>
           <div className="flex-1">
             <h3 className="font-semibold text-white line-clamp-2 leading-tight">{content.title}</h3>
             <p className="text-sm text-gray-400">{content.authorName}</p>
@@ -273,6 +278,7 @@ const CategoryPageContent = () => {
             createdAt: createdAtTimestamp ? createdAtTimestamp.toDate() : new Date(),
             authorName: d.authorName || "Unknown",
             authorPhotoURL: d.authorPhotoURL || null,
+            authorId: d.authorId || "", // ← ADD THIS
             views: d.views || 0,
             videoUrl: d.videoUrl || "",
             thumbnailUrl: d.thumbnailUrl || "",

@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { sendNewSubscriberNotification } from "@/app/utils/notifications/subscriptionNotificatons";
 import ShareModal from "@/app/components/ShareModal";
-import DownloadModal from "@/app/components/DownloadModal"; // ADD THIS IMPORT
-import MoreOptionsMenu from "@/app/components/MoreOptionsMenu";
-import CreateClipModal from "@/app/components/CreateClipModal";
 import { Users, Bell, BellRing, BellOff, ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal } from "lucide-react";
 import { doc, onSnapshot, Timestamp, getDoc, setDoc, deleteDoc, collection, query, getDocs, increment, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/app/context/AuthContext";
@@ -37,9 +35,12 @@ type NotificationPreference = "all" | "personalized" | "none" | "unsubscribed";
 
 const VideoPlayerPage = () => {
   const { user } = useAuth();
+  const params = useParams();
+const videoId =
+  typeof params?.id === "string" ? params.id : null;
   const [videoData, setVideoData] = useState<VideoData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [videoId, setVideoId] = useState<string | null>(null);
+  // const [videoId, setVideoId] = useState<string | null>(null);
   const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>("unsubscribed");
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -50,40 +51,38 @@ const VideoPlayerPage = () => {
   const [dislikeCount, setDislikeCount] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [openShare, setOpenShare] = useState(false);
-  const [openDownload, setOpenDownload] = useState(false); // ADD THIS STATE
-  const [showMoreDropdown, setShowMoreDropdown] = useState(false);
-  const [isInWatchLater, setIsInWatchLater] = useState(false);
-  const [showWatchLaterMsg, setShowWatchLaterMsg] = useState(false);
-  const [openClip, setOpenClip] = useState(false);
   const viewLoggedRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("v");
-    if (id) setVideoId(id);
-    else setIsLoading(false);
-  }, []);
+useEffect(() => {
+  if (!videoId) {
+    setIsLoading(false);
+    return;
+  }
 
-  useEffect(() => {
-    if (!videoId) return;
-    setIsLoading(true);
-    const videoDocRef = doc(db, "videos", videoId);
-    const unsubscribe = onSnapshot(
-      videoDocRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setVideoData({ id: docSnap.id, ...data } as VideoData);
-        } else {
-          setVideoData(null);
-        }
-        setIsLoading(false);
-      },
-      () => setIsLoading(false)
-    );
-    return () => unsubscribe();
-  }, [videoId]);
+  setIsLoading(true);
+
+  const videoDocRef = doc(db, "videos", videoId);
+
+  const unsubscribe = onSnapshot(
+    videoDocRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        setVideoData({ id: docSnap.id, ...docSnap.data() } as VideoData);
+      } else {
+        setVideoData(null);
+      }
+      setIsLoading(false);
+    },
+    (error) => {
+      console.error("Video fetch error:", error);
+      setIsLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+}, [videoId]);
+
 
   // Real-time subscription status listener
   useEffect(() => {
@@ -165,23 +164,6 @@ const VideoPlayerPage = () => {
     loadReactions();
   }, [videoId, user]);
 
-  // Check if video is in watch later
-  useEffect(() => {
-    const checkWatchLater = async () => {
-      if (!user || !videoId) return;
-
-      try {
-        const watchLaterRef = doc(db, `users/${user.uid}/watchLater`, videoId);
-        const watchLaterSnap = await getDoc(watchLaterRef);
-        setIsInWatchLater(watchLaterSnap.exists());
-      } catch (error) {
-        console.error("Error checking watch later:", error);
-      }
-    };
-
-    checkWatchLater();
-  }, [user, videoId]);
-
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -242,6 +224,8 @@ const VideoPlayerPage = () => {
         await deleteDoc(followingRef);
 
         // Update channel subscriber count
+        // const channelSnap = await getDoc(channelRef);
+        // if (channelSnap.exists()) {
         await updateDoc(channelRef, {
             subscriberCount: increment(-1)
            });
@@ -258,13 +242,14 @@ const VideoPlayerPage = () => {
         subscriberCount: increment(1),});
       
         // Create notification for the creator
+        const notificationRef = doc(collection(db, `users/${videoData.authorId}/notifications`));
         await sendNewSubscriberNotification({
-          recipientId: videoData.authorId,
-          subscriberUserId: user.uid,
-          subscriberName: user.displayName || "Someone",
-          subscriberPhotoURL: user.photoURL,
-          channelName: videoData.authorName || "Unknown Channel",
-        });
+  recipientId: videoData.authorId,
+  subscriberUserId: user.uid,
+  subscriberName: user.displayName || "Someone",
+  subscriberPhotoURL: user.photoURL,
+  channelName: videoData.authorName || "Unknown Channel",
+});
 
         console.log("Subscribed successfully");
       }
@@ -283,6 +268,7 @@ const VideoPlayerPage = () => {
 
     try {
       const followingRef = doc(db, `users/${user.uid}/following`, videoData.authorId);
+      const channelRef = doc(db, "channels", videoData.authorId);
 
       if (pref === "unsubscribed") {
         // UNSUBSCRIBE
@@ -352,44 +338,6 @@ const VideoPlayerPage = () => {
     }
   };
 
-    const handleWatchLater = async () => {
-    if (!user || !videoId || !videoData) return;
-
-    try {
-      const watchLaterRef = doc(db, `users/${user.uid}/watchLater`, videoId);
-
-      if (isInWatchLater) {
-        // Remove from watch later
-        await deleteDoc(watchLaterRef);
-        setIsInWatchLater(false);
-        console.log("Removed from watch later");
-      } else {
-        // Add to watch later
-        await setDoc(watchLaterRef, {
-          videoId: videoId,
-          title: videoData.title,
-          thumbnailUrl: videoData.thumbnailUrl || "",
-          authorName: videoData.authorName || "Unknown",
-          authorId: videoData.authorId || "",
-          addedAt: Timestamp.now(),
-        });
-        setIsInWatchLater(true);
-        // 🔥 ADD THESE 2 LINES
-setShowWatchLaterMsg(true);
-setTimeout(() => setShowWatchLaterMsg(false), 3000);
-        console.log("Added to watch later");
-      }
-      setShowMoreDropdown(false);
-    } catch (error) {
-      console.error("Error toggling watch later:", error);
-      alert("Failed to update watch later. Please try again.");
-    }
-  };
-  const handleClip = () => {
-  setOpenClip(true);
-  setShowMoreDropdown(false);
-};                                      
-
   const formatNumber = (num: number) => {
     if (num >= 1000000) {
       return (num / 1000000).toFixed(1) + "M";
@@ -438,7 +386,7 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
     );
   }
 
-  if (!videoData || !videoId) {
+  if (!videoData && !isLoading) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
         <Header />
@@ -452,7 +400,7 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
       </div>
     );
   }
-
+  if (!videoData) return null;
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       <Header />
@@ -465,7 +413,7 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
               poster={videoData.thumbnailUrl}
               isLive={videoData.isLive}
               userId={user?.uid}
-              contentId={videoId}
+              contentId={videoId ?? undefined}
               contentTitle={videoData.title}
               thumbnailUrl={videoData.thumbnailUrl}
               authorName={videoData.authorName}
@@ -482,57 +430,39 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
           
           {/* Video Title */}
           {videoData.title && (
-           <h1 className="text-lg md:text-xl font-bold text-white mb-2">{videoData.title}</h1>
+            <h1 className="text-xl font-bold text-white mb-2">{videoData.title}</h1>
           )}
-          {showWatchLaterMsg && (
-  <div className="mb-3 bg-gray-900 text-white px-4 py-2 rounded-md flex items-center justify-between max-w-md">
-    <span className="text-sm">Saved to Watch later</span>
-    {/* <Link
-      href="/profile?tab=watch-later"
-      className="text-sm text-blue-400 hover:underline"
-    >
-      Change
-    </Link> */}
-  </div>
-)}
-<CreateClipModal
-  open={openClip}
-  onClose={() => setOpenClip(false)}
-  videoUrl={videoData.videoUrl}
-/>
 
           {/* Video Info Bar */}
           <div className="flex items-center justify-between gap-4 mb-3">
-           {/* Left: Author Info & Subscribe */}
-<div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap md:flex-nowrap">
-  <div className="flex items-center gap-3 min-w-0">
-    {/* Avatar - clickable via UserAvatar component */}
-    <UserAvatar
-      userId={videoData.authorId}
-      alt={videoData.authorName}
-      size={40}
-    />
+            {/* Left: Author Info & Subscribe */}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
 
-    {/* Author name - separate link */}
-    <Link 
-      href={`/profile/${videoData.authorId}`}
-      className="flex-1 min-w-0"
-    >
-      {videoData.authorName && (
-        <div className="font-semibold truncate hover:underline cursor-pointer">
-          {videoData.authorName}
-        </div>
-      )}
-      <div className="text-xs text-gray-400">
-        {subscriberCount > 0
-          ? `${formatNumber(subscriberCount)} subscribers`
-          : "No subscribers yet"}
-      </div>
-    </Link>
-  </div>      
+  {/* CLICKABLE AUTHOR */}
+<div className="flex items-center gap-3 min-w-0">
+  <UserAvatar
+    userId={videoData.authorId}
+    alt={videoData.authorName}
+    size={40}
+  />
+
+  <Link 
+    href={`/profile/${videoData.authorId}`}
+    className="flex-1 min-w-0"
+  >
+    <div className="font-semibold truncate hover:underline cursor-pointer">
+      {videoData.authorName || "Unknown"}
+    </div>
+    <div className="text-xs text-gray-400">
+      {subscriberCount > 0
+        ? `${formatNumber(subscriberCount)} subscribers`
+        : "No subscribers yet"}
+    </div>
+  </Link>
+</div>        
               {/* Subscribe Button & Notification Bell */}
               {user && videoData.authorId && videoData.authorId !== user.uid && (
-                <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={handleSubscribe}
                     disabled={isProcessing}
@@ -649,9 +579,7 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
                   title={!user ? "Sign in to like" : "Like"}
                 >
                   <ThumbsUp className="w-5 h-5" />
-                  <span className="hidden sm:inline text-sm font-semibold">
-  {formatNumber(likeCount)}
-</span>
+                  <span className="text-sm font-semibold">{formatNumber(likeCount)}</span>
                 </button>
                 <button
                   onClick={() => handleVideoReaction("dislike")}
@@ -662,44 +590,41 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
                   title={!user ? "Sign in to dislike" : "Dislike"}
                 >
                   <ThumbsDown className="w-5 h-5" />
-                  <span className="hidden sm:inline text-sm font-semibold">
-  {dislikeCount > 0 ? formatNumber(dislikeCount) : ""}
-</span>
+                  <span className="text-sm font-semibold">{dislikeCount > 0 ? formatNumber(dislikeCount) : ""}</span>
                 </button>
               </div>
 
               {/* Share */}
-              <button className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full">
+              {/* <button className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors">
+                <Share2 className="w-5 h-5" />
+                <span className="text-sm font-semibold">Share</span>
+              </button> */}
+<button
+  onClick={() => setOpenShare(true)}
+  className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full"
+>
   <Share2 className="w-5 h-5" />
-  <span className="hidden sm:inline">Share</span>
+  Share
 </button>
 
-              {/* Download - UPDATED */}
-              {/* <button 
-                onClick={() => setOpenDownload(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors"
-              >
+<ShareModal
+  open={openShare}
+  onClose={() => setOpenShare(false)}
+  videoId={videoId!}
+  title={videoData.title}
+/>
+              {/* Download */}
+              {/* <button className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors">
                 <Download className="w-5 h-5" />
               </button> */}
 
               {/* More */}
-              <div className="relative">
-                <button 
-                  onClick={() => setShowMoreDropdown(!showMoreDropdown)}
-                  className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors"
-                >
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
+              <button className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors">
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
 
-                <MoreOptionsMenu
-                  open={showMoreDropdown}
-                  onClose={() => setShowMoreDropdown(false)}
-                  onWatchLater={handleWatchLater}
-                  onClip={handleClip}
-                  isInWatchLater={isInWatchLater}
-                  isSignedIn={!!user}
-                />
-              </div></div>  </div>
           {/* Views and Date */}
           {(videoData.views !== undefined || videoData.createdAt) && (
             <div className="text-sm text-gray-400 mb-3">
@@ -729,24 +654,6 @@ setTimeout(() => setShowWatchLaterMsg(false), 3000);
         </div>
       </main>
       <Footer />
-
-      {/* Share Modal */}
-      <ShareModal
-        open={openShare}
-        onClose={() => setOpenShare(false)}
-        videoId={videoId}
-        title={videoData.title}
-      />
-
-      {/* Download Modal - ADDED */}
-      {/* <DownloadModal
-        open={openDownload}
-        onClose={() => setOpenDownload(false)}
-        videoUrl={videoData.videoUrl}
-        videoTitle={videoData.title}
-        onDownloadStart={() => console.log("Download started")}
-        onDownloadComplete={() => console.log("Download completed")}
-      /> */}
     </div>
   );
 };

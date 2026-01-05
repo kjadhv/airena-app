@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useState, Suspense, useMemo } from "react";
 import { PlayCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { collection, getDocs, query, Timestamp, where } from "firebase/firestore";
@@ -10,7 +9,6 @@ import Image from "next/image";
 import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/effect-fade";
-
 import Footer from "@/app/components/Footer";
 import UserAvatar from "@/app/components/UserAvatar";
 import { db } from "@/app/firebase/config";
@@ -25,6 +23,7 @@ interface Content {
   description: string;
   category: "games" | "sports";
   createdAt: Date;
+  authorId: string; // ✅ ADD THIS
   authorName: string;
   authorPhotoURL: string | null;
   views: number;
@@ -59,12 +58,12 @@ const HeroCarousel = ({ featuredContent }: { featuredContent: Content[] }) => {
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
             <Image
-  src={content.thumbnailUrl}
-  alt={content.title}
-  fill
-  sizes="100vw"
-  className="object-cover group-hover:scale-105 transition-transform duration-500"
-/>
+              src={content.thumbnailUrl}
+              alt={content.title}
+              fill
+              sizes="100vw"
+              className="object-cover group-hover:scale-105 transition-transform duration-500"
+            />
             <div className="absolute bottom-0 left-0 p-6 lg:p-10 z-20">
               <h2 className="text-3xl lg:text-5xl font-extrabold text-white mb-3">
                 {content.title}
@@ -107,10 +106,15 @@ const ContentRow = ({ title, content }: { title: string; content: Content[] }) =
           prevEl: `.prev-${swiperId}`,
         }}
         spaceBetween={16}
-        slidesPerView="auto"
+        slidesPerView={4}
+        breakpoints={{
+          0: { slidesPerView: 1.4 },
+          640: { slidesPerView: 2.2 },
+          1024: { slidesPerView: 4 },
+        }}
       >
         {content.map((item) => (
-          <SwiperSlide key={item.id} className="!w-[280px] sm:!w-[300px]">
+          <SwiperSlide key={item.id}>
             <VideoCard content={item} />
           </SwiperSlide>
         ))}
@@ -137,12 +141,12 @@ const VideoCard = ({ content }: { content: Content }) => {
     >
       <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800">
         <Image
-  src={content.thumbnailUrl}
-  alt={content.title}
-  fill
-  sizes="300px"
-  className="object-cover"
-/>
+          src={content.thumbnailUrl}
+          alt={content.title}
+          fill
+          sizes="300px"
+          className="object-cover"
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 text-xs rounded">
           {formatDuration(content.duration)}
@@ -151,7 +155,12 @@ const VideoCard = ({ content }: { content: Content }) => {
       </div>
 
       <div className="flex items-start gap-3 mt-3">
-        <UserAvatar src={content.authorPhotoURL} alt={content.authorName} size={38} />
+        {/* ✅ ADD userId PROP */}
+        <UserAvatar 
+          userId={content.authorId}
+          alt={content.authorName} 
+          size={38} 
+        />
         <div>
           <h3 className="font-semibold text-white line-clamp-2">{content.title}</h3>
           <p className="text-sm text-gray-400">{content.authorName}</p>
@@ -164,21 +173,22 @@ const VideoCard = ({ content }: { content: Content }) => {
 /* ===================== MAIN ===================== */
 
 const WatchContent = () => {
-  const { search } = useSearch(); // ✅ GLOBAL SEARCH
+  const { appliedSearch } = useSearch();
   const [allContent, setAllContent] = useState<Content[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   /* 🔥 FILTER BY SEARCH (CATEGORY + TAG + TITLE) */
   const filteredContent = useMemo(() => {
-    if (!search) return allContent;
+    if (!appliedSearch) return allContent;
 
     return allContent.filter(
       (v) =>
-        v.title.toLowerCase().includes(search) ||
-        v.category.toLowerCase() === search ||
-        v.tags?.some((t) => t.toLowerCase().includes(search))
+        v.title.toLowerCase().includes(appliedSearch) ||
+        v.category.toLowerCase().includes(appliedSearch) ||
+        v.authorName.toLowerCase().includes(appliedSearch) ||
+        v.tags?.some((t) => t.toLowerCase().includes(appliedSearch))
     );
-  }, [search, allContent]);
+  }, [appliedSearch, allContent]);
 
   /* 🔥 SORTED SECTIONS */
   const { featured, trending, latest } = useMemo(() => {
@@ -211,6 +221,7 @@ const WatchContent = () => {
             description: data.description,
             category: data.category,
             createdAt: (data.createdAt as Timestamp).toDate(),
+            authorId: data.authorId || "", // ✅ ADD THIS
             authorName: data.authorName,
             authorPhotoURL: data.authorPhotoURL,
             views: data.views || 0,
@@ -233,9 +244,9 @@ const WatchContent = () => {
       <main className="pt-24 px-6 lg:px-16 lg:ml-20">
         {isLoading ? (
           <p>Loading...</p>
-        ) : filteredContent.length === 0 && search ? (
+        ) : filteredContent.length === 0 && appliedSearch ? (
           <p className="text-gray-400 text-center mt-20">
-            {`No videos found for "${search}"`}
+            {`No videos found for "${appliedSearch}"`}
           </p>
         ) : (
           <>

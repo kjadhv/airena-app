@@ -1,10 +1,12 @@
 "use client";
+import { storage } from "@/app/firebase/config";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import React, { useState, useRef } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from "next/image";
+import type { FirebaseError } from "firebase/app";
 import { UploadCloud, Film, Image as ImageIcon, Tag, Eye } from 'lucide-react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 const UploadForm = () => {
     const { user } = useAuth();
@@ -59,21 +61,23 @@ const UploadForm = () => {
         return withRetry(() => {
             return new Promise<string>((resolve, reject) => {
                 try {
-                    const storage = getStorage();
-                    const metadata = {
-                        contentType: file.type,
-                        customMetadata: { 'uploadedBy': user?.uid || 'unknown' }
-                    };
-                    
                     const storageRef = ref(storage, path);
+                    const metadata = {
+  contentType: file.type || "application/octet-stream",
+  cacheControl: "public,max-age=31536000",
+  ...(user?.uid && {
+    customMetadata: {
+      uploadedBy: user.uid,
+    },
+  }),
+};
                     const uploadTask = uploadBytesResumable(storageRef, file, metadata);
-
                     uploadTask.on('state_changed',
                         (snapshot) => {
                             const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                             if (trackProgress) setUploadProgress(progress);
                         },
-                        (error) => {
+                        (error: FirebaseError) => {
                             console.error('Upload error:', error.code, error.message);
                             reject(error);
                         },
@@ -120,18 +124,32 @@ const UploadForm = () => {
         setError('');
 
         try {
-            // Wait for auth to be ready
-            await user.reload();
-            
+              // CRITICAL FIX: Refresh token BEFORE uploading
+        setUploadStatus('Authenticating...');
+        await user.reload();
+await user.getIdToken(true);
+await new Promise(resolve => setTimeout(resolve, 1000));
+
+           // Force token refresh so Storage gets auth context
             setUploadStatus('Uploading files... Please do not close the tab.');
 
-            const thumbnailUploadPath = `thumbnails/${user.uid}/${Date.now()}_${thumbnailFile.name}`;
-            const videoUploadPath = `videos/${user.uid}/${Date.now()}_${videoFile.name}`;
+            const safeThumbnailName = thumbnailFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+const safeVideoName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-            const [thumbnailUrl, videoUrl] = await Promise.all([
-                uploadFile(thumbnailFile, thumbnailUploadPath, false),
-                uploadFile(videoFile, videoUploadPath, true), 
-            ]);
+const thumbnailUploadPath = `thumbnails/${user.uid}/${Date.now()}_${safeThumbnailName}`;
+const videoUploadPath = `videos/${user.uid}/${Date.now()}_${safeVideoName}`;
+
+
+           const thumbnailUrl = await uploadFile(
+  thumbnailFile,
+  thumbnailUploadPath
+);
+
+const videoUrl = await uploadFile(
+  videoFile,
+  videoUploadPath,
+  true
+);
 
             setUploadStatus('Saving video details...');
             const idToken = await user.getIdToken(true); // Force refresh token
@@ -175,16 +193,18 @@ const UploadForm = () => {
                 errorMessage = String(err.message);
             }
             
-            // Check for specific error types
-            if (errorMessage.includes('storage/unauthorized') || errorMessage.includes('auth/')) {
-                setError('Authentication error. Please log out and log back in.');
-            } else if (errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
-                setError('Network error. Please check your internet connection and try again.');
-            } else if (errorMessage.includes('storage/retry-limit-exceeded')) {
-                setError('Upload timeout. Try with a smaller video file.');
-            } else {
-                setError(errorMessage);
-            }
+             // Enhanced error handling
+        if (errorMessage.includes('storage/unauthorized') || errorMessage.includes('auth/')) {
+            setError('Authentication error. Please log out and log back in.');
+        } else if (errorMessage.includes('storage/unknown')) {
+            setError('Upload failed due to authentication. Please log out and log back in, then try again.');
+        } else if (errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
+            setError('Network error. Please check your internet connection and try again.');
+        } else if (errorMessage.includes('storage/retry-limit-exceeded')) {
+            setError('Upload timeout. Try with a smaller video file.');
+        } else {
+            setError(errorMessage);
+        }
             
             setIsSubmitting(false);
             setUploadProgress(0);
