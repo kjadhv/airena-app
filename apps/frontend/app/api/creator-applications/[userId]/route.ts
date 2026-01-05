@@ -4,11 +4,11 @@ import { db, authAdmin } from "@/app/firebase/firebaseAdmin";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
   try {
     // Await the params Promise
-    const { userId } = await params;
+    const { userId } = params;
     
     const idToken = req.headers.get("Authorization")?.split("Bearer ")[1];
     if (!idToken) {

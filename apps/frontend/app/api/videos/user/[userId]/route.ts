@@ -4,10 +4,10 @@ import { db } from '@/app/firebase/config';
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
   try {
-    const { userId } = await context.params;
+    const { userId } = params;
 
     if (!userId) {
       return NextResponse.json(
