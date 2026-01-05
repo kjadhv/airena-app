@@ -2,16 +2,17 @@ import React from "react";
 import ProfileView from "@/app/profile/ProfileView";
 
 interface PageProps {
-  params: {
+  params: Promise<{
     userId: string;
-  };
+  }>;
 }
 
 // Cast imported component to a component type that accepts the expected prop
 const ProfileViewComponent = ProfileView as React.ComponentType<{ profileUserId: string }>;
 
-export default function ProfileByIdPage({ params }: PageProps) {
-  return <ProfileViewComponent profileUserId={params.userId} />;
+export default async function ProfileByIdPage({ params }: PageProps) {
+  const { userId } = await params;
+  return <ProfileViewComponent profileUserId={userId} />;
 }
 
 // "use client";
