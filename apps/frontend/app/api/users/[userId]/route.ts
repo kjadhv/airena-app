@@ -4,10 +4,10 @@ import { authAdmin } from '@/app/firebase/firebaseAdmin';
 
 export async function POST(
   req: NextRequest, 
-  { params }: { params: { userId: string } }
+  context: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = params;
+    const { userId } =  await context.params;
     const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
     if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
