@@ -4,10 +4,10 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(
     req: NextRequest, 
-    { params }: { params: { postId: string } }
+    context: { params: Promise<{ postId: string }> }
 ) {
     try {
-        const { postId } = params; // ✅ FIXED HERE
+        const { postId } = await context.params;
         const idToken = req.headers
       .get('Authorization')
       ?.split('Bearer ')[1];
