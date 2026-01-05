@@ -54,7 +54,6 @@ const BlogCard: React.FC<BlogCardProps> = ({ post, isLarge = false, onDelete }) 
                         src={post.imageUrl} 
                         alt={post.title} 
                         className="group-hover:scale-105 transition-transform duration-500"
-                        fallbackText={post.title} 
                     />
                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent"></div>
                 </div>

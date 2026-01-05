@@ -101,8 +101,7 @@ const EditPostPage = () => {
                             <input id="image" type="file" accept="image/*" onChange={(e) => e.target.files && setImage(e.target.files[0])} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-emerald-500/20 file:text-emerald-300" />
                             {existingImageUrl && !image && (
                                 <div className="mt-4 relative w-40 h-24 rounded-lg overflow-hidden">
-                                    <AppImage src={existingImageUrl} alt="Current featured image" fallbackText="Current Image"/>
-                                </div>
+                                    <AppImage src={existingImageUrl} alt="Current featured image" /></div>
                             )}
                         </div>
                          <div className="flex items-center justify-between bg-gray-800/50 p-4 rounded-lg border border-gray-700">
