@@ -23,9 +23,10 @@ import { ThumbsUp, ThumbsDown, MoreVertical, Edit2, Trash2 } from "lucide-react"
 import Image from "next/image";
 
 // Import notification functions
+// ...existing code...
 import { sendNewCommentNotification, sendReplyNotification } from "@/app/utils/notifications/commentNotifications";
-import { sendCommentLikeNotification } from "@/app/utils/notifications/rectionNotification";
-
+import { sendCommentLikeNotification } from "@/app/utils/notifications/reactionNotifications";
+// ...existing code...
 interface Comment {
   id: string;
   text: string;

@@ -15,7 +15,7 @@ export {
 // Export reaction notifications
 export {
   sendCommentLikeNotification,
-} from "./rectionNotification";
+} from "./reactionNotifications";
 
 // Export subscription/follower notifications
 export {
