@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json([], { status: 200 });
         }
 
-        const applications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const applications = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
         return NextResponse.json(applications, { status: 200 });
 
     } catch (error: unknown) {
