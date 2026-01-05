@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 type RouteContext = {
-  params: {
+  params: Promise<{
     streamKey: string;
-  };
+  }>;
 };
 /**
  * Handles GET requests to fetch the status of a specific stream.
  */
 export async function GET(
   request: NextRequest,
-  { params }: RouteContext
+  context: RouteContext
 ) {
-  const { streamKey } = params; // Await the params Promise
+  const { streamKey } = await context.params; // Await the params Promise
   const backendApiUrl = process.env.NESTJS_BACKEND_URL;
 
   if (!backendApiUrl) {

@@ -3,17 +3,17 @@ import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     postId: string;
-  };
+  }>;
 };
 
 export async function POST(
   req: NextRequest,
-  { params }: RouteContext
+  context: RouteContext
 ) {
   try {
-    const { postId } = params;
+    const { postId } = await context.params;
 
     const idToken = req.headers
       .get('Authorization')

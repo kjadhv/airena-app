@@ -3,16 +3,16 @@ import { db, authAdmin, storage as adminStorage } from '@/app/firebase/firebaseA
 import slugify from 'slugify';
 
 interface RouteContext {
-    params: { postId: string };
+    params: Promise<{ postId: string }>;
 }
 
 // GET: Fetches a single post's data for the edit page
 export async function GET(
   req: NextRequest,
-  { params }: RouteContext
+  context: RouteContext
 ) {
   try {
-    const { postId } = params;
+    const { postId } = await context.params;
         const docRef = db.collection('posts').doc(postId);
         const doc = await docRef.get();
 

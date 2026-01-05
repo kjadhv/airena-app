@@ -5,17 +5,16 @@ import { FieldValue } from 'firebase-admin/firestore';
 export const dynamic = 'force-dynamic';
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     postId: string;
-  };
+  }>;
 };
-
 export async function POST(
   req: NextRequest,
-  { params }: RouteContext
+  context: RouteContext
 ) {
   try {
-    const { postId } = params;
+    const { postId } = await context.params;
 
     console.log('View tracking called for post:', postId);
 

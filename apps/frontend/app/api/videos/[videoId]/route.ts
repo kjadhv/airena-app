@@ -5,17 +5,17 @@ import { FieldValue } from 'firebase-admin/firestore';
 export const dynamic = 'force-dynamic';
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     videoId: string;
-  };
+  }>;
 };
 // --- UPDATE a specific video (PUT) ---
 export async function PUT(
     req: NextRequest,
-    { params }: RouteContext
+    context: RouteContext
 ) {
     try {
-        const { videoId } = params;
+        const { videoId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -65,10 +65,10 @@ export async function PUT(
 // --- DELETE a specific video ---
 export async function DELETE(
     req: NextRequest,
-    { params }: RouteContext
+    context: RouteContext
 ) {
     try {
-        const { videoId } = params;
+        const { videoId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -99,10 +99,10 @@ export async function DELETE(
 // --- INCREMENT video views (POST) - REVISED FOR UNIQUE VIEWS & ROBUSTNESS ---
 export async function POST(
     req: NextRequest,
-    { params }: RouteContext
+    context: RouteContext
 ) {
     try {
-        const { videoId } = params;
+        const { videoId } = await context.params;
         const videoRef = db.collection('videos').doc(videoId);
 
         // ✅ Check if the video document exists right at the beginning
