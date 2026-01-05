@@ -43,7 +43,7 @@ export async function POST(
       .collection('reactions')
       .doc(`${userId}_${reactionType}`);
 
-    await db.runTransaction(async (transaction) => {
+    await db.runTransaction(async (transaction: any) => {
       const reactionDoc = await transaction.get(reactionRef);
       const postDoc = await transaction.get(postRef);
 

@@ -40,7 +40,7 @@ export async function POST(
         };
 
         // Use a transaction to add the comment and update the count
-        await db.runTransaction(async (transaction) => {
+        await db.runTransaction(async (transaction: any) => {
             const postDoc = await transaction.get(postRef);
             if (!postDoc.exists) {
                 throw new Error("Post not found");
