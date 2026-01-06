@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Scripts
 /scripts
+
+# Firebase / secrets
+*.json
+firebase-adminsdk-*.json
+.env
+.env.local
