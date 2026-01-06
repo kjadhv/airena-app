@@ -5,6 +5,15 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 const FFMPEG_PATH = "C:\\ffmpeg\\ffmpeg.exe";
+export async function GET() {
+  console.log("🔥 ENV CHECK (GET)", {
+    projectId: !!process.env.FIREBASE_PROJECT_ID,
+    email: !!process.env.FIREBASE_CLIENT_EMAIL,
+    key: !!process.env.FIREBASE_PRIVATE_KEY,
+  });
+
+  return new Response("ENV TEST OK");
+}
 
 export async function POST(req: NextRequest) {
   console.log("ENV CHECK (runtime)", {
