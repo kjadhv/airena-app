@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
+import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
 
 export async function GET(req: NextRequest) {
     try {
@@ -10,6 +10,10 @@ export async function GET(req: NextRequest) {
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        
+        // Get initialized instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
         
         // CRITICAL: Verify the user is a SuperAdmin on the server
         const decodedToken = await authAdmin.verifyIdToken(idToken);
