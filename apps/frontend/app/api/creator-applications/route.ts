@@ -1,4 +1,6 @@
 // app/api/creator-applications/route.ts
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from 'next/server';
 import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
 
