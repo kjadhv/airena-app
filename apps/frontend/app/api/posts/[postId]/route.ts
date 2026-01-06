@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 export const runtime = 'nodejs';
-
+export const revalidate = 0;
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, getAuthAdmin, getStorageAdmin } from '@/app/firebase/firebaseAdmin';
 import slugify from 'slugify';
