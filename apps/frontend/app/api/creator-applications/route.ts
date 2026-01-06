@@ -1,5 +1,6 @@
 // app/api/creator-applications/route.ts
 export const dynamic = "force-dynamic";
+export const runtime = 'nodejs'; // Add this line
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
@@ -11,17 +12,14 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
-        // Get initialized instances
         const authAdmin = getAuthAdmin();
         const db = getDb();
         
-        // CRITICAL: Verify the user is a SuperAdmin on the server
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         if (decodedToken.superAdmin !== true) {
             return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
         }
 
-        // Fetch all applications with a "pending" status
         const applicationsRef = db.collection('creator-applications');
         const q = applicationsRef.where('status', '==', 'pending');
         const snapshot = await q.get();

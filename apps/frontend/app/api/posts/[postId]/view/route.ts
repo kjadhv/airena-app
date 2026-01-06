@@ -1,14 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
-
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 type RouteContext = {
   params: Promise<{
     postId: string;
   }>;
 };
+
 export async function POST(
   req: NextRequest,
   context: RouteContext
@@ -24,6 +26,10 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // Get Firebase instances
+    const db = getDb();
+    const authAdmin = getAuthAdmin();
 
     const postRef = db.collection('posts').doc(postId);
     const postDoc = await postRef.get();

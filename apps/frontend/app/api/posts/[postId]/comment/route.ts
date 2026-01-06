@@ -1,5 +1,8 @@
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
+import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(
@@ -9,15 +12,19 @@ export async function POST(
     try {
         const { postId } = await context.params;
         const idToken = req.headers
-      .get('Authorization')
-      ?.split('Bearer ')[1];
+            .get('Authorization')
+            ?.split('Bearer ')[1];
 
-         if (!idToken) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+        if (!idToken) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
         
         const { text } = await req.json();
 

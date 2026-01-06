@@ -4,17 +4,22 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
-
-// Initialize Firebase Admin only if credentials are available
 let authAdmin: ReturnType<typeof getAuth> | null = null;
 let db: ReturnType<typeof getFirestore> | null = null;
 let storage: ReturnType<typeof getStorage> | null = null;
 
 function initializeFirebaseAdmin() {
+  // Don't initialize during build time
+  if (typeof window === 'undefined' && !process.env.FIREBASE_PROJECT_ID) {
+    console.warn('Firebase Admin: Skipping initialization - no credentials');
+    return;
+  }
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
+
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error(
       "Missing Firebase Admin environment variables. " +
@@ -38,25 +43,32 @@ function initializeFirebaseAdmin() {
   storage = getStorage();
 }
 
-// Helper function to ensure Firebase is initialized
 function ensureInitialized() {
   if (!authAdmin || !db || !storage) {
     initializeFirebaseAdmin();
   }
 }
 
-// Export getters that initialize on first use
 export function getAuthAdmin() {
   ensureInitialized();
-  return authAdmin!;
+  if (!authAdmin) {
+    throw new Error("Firebase Auth not initialized - check environment variables");
+  }
+  return authAdmin;
 }
 
 export function getDb() {
   ensureInitialized();
-  return db!;
+  if (!db) {
+    throw new Error("Firestore not initialized - check environment variables");
+  }
+  return db;
 }
 
 export function getStorageAdmin() {
   ensureInitialized();
-  return storage!;
+  if (!storage) {
+    throw new Error("Storage not initialized - check environment variables");
+  }
+  return storage;
 }

@@ -1,5 +1,8 @@
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin, storage as adminStorage } from '@/app/firebase/firebaseAdmin';
+import { getDb, getAuthAdmin, getStorageAdmin } from '@/app/firebase/firebaseAdmin';
 import slugify from 'slugify';
 
 interface RouteContext {
@@ -13,17 +16,21 @@ export async function GET(
 ) {
   try {
     const { postId } = await context.params;
-        const docRef = db.collection('posts').doc(postId);
-        const doc = await docRef.get();
+    
+    // Get Firebase instance
+    const db = getDb();
+    
+    const docRef = db.collection('posts').doc(postId);
+    const doc = await docRef.get();
 
-        if (!doc.exists) {
-            return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-        }
-        return NextResponse.json({ id: doc.id, ...doc.data() }, { status: 200 });
-    } catch (error: unknown) {
-        console.error("GET post error:", error instanceof Error ? error.message : 'Unknown error');
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    if (!doc.exists) {
+        return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
+    return NextResponse.json({ id: doc.id, ...doc.data() }, { status: 200 });
+  } catch (error: unknown) {
+      console.error("GET post error:", error instanceof Error ? error.message : 'Unknown error');
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 // PUT: Updates an existing post
@@ -32,6 +39,11 @@ export async function PUT(req: NextRequest, context: RouteContext) {
         const { postId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
+        const adminStorage = getStorageAdmin();
 
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         if (decodedToken.admin !== true) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -62,8 +74,13 @@ export async function PUT(req: NextRequest, context: RouteContext) {
             const file = bucket.file(`blog-images/${fileName}`);
             const imageBuffer = Buffer.from(await image.arrayBuffer());
             await file.save(imageBuffer, { metadata: { contentType: image.type } });
-            await file.makePublic();
-            updateData.imageUrl = file.publicUrl();
+            
+            // Generate signed URL instead of makePublic
+            const [signedUrl] = await file.getSignedUrl({
+                action: "read",
+                expires: "01-01-2035",
+            });
+            updateData.imageUrl = signedUrl;
         }
 
         await postRef.update(updateData);
@@ -81,6 +98,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
         const { postId } = await context.params;
         const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
 
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         if (decodedToken.admin !== true) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

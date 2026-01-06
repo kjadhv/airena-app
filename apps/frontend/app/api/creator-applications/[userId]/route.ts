@@ -1,6 +1,9 @@
 // app/api/creator-applications/[userId]/route.ts
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from "next/server";
-import { db, authAdmin } from "@/app/firebase/firebaseAdmin";
+import { getDb, getAuthAdmin } from "@/app/firebase/firebaseAdmin";
 
 export async function POST(
   req: NextRequest,
@@ -8,12 +11,15 @@ export async function POST(
 ) {
   try {
     // Await the params Promise
-    const { userId } =  await context.params;
+    const { userId } = await context.params;
     
     const idToken = req.headers.get("Authorization")?.split("Bearer ")[1];
     if (!idToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const authAdmin = getAuthAdmin();
+    const db = getDb();
 
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     if (decodedToken.superAdmin !== true) {

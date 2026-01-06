@@ -1,5 +1,8 @@
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
+import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 type RouteContext = {
@@ -25,6 +28,10 @@ export async function POST(
         { status: 401 }
       );
     }
+
+    // Get Firebase instances
+    const authAdmin = getAuthAdmin();
+    const db = getDb();
 
     const { reactionType } = await req.json();
 

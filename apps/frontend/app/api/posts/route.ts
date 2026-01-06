@@ -1,6 +1,9 @@
 // app/api/posts/route.ts
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db, storage as adminStorage, authAdmin } from '@/app/firebase/firebaseAdmin';
+import { getDb, getStorageAdmin, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
 import { Timestamp } from 'firebase-admin/firestore';
 import slugify from 'slugify';
 
@@ -11,6 +14,11 @@ export async function POST(req: NextRequest) {
     if (!idToken) {
       return NextResponse.json({ error: 'Unauthorized: No token provided.' }, { status: 401 });
     }
+
+    // Get Firebase instances
+    const authAdmin = getAuthAdmin();
+    const db = getDb();
+    const adminStorage = getStorageAdmin();
 
     // Verify user
     const decodedToken = await authAdmin.verifyIdToken(idToken);
