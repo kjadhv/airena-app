@@ -1,15 +1,20 @@
-// app/api/users/[userId]/route.ts
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { authAdmin } from '@/app/firebase/firebaseAdmin';
+import { getAuthAdmin } from '@/app/firebase/firebaseAdmin';
 
 export async function POST(
   req: NextRequest, 
   context: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } =  await context.params;
+    const { userId } = await context.params;
     const idToken = req.headers.get('Authorization')?.split('Bearer ')[1];
     if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Get Firebase instance
+    const authAdmin = getAuthAdmin();
 
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     if (decodedToken.superAdmin !== true) {

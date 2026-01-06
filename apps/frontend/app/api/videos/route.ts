@@ -1,5 +1,8 @@
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin } from '@/app/firebase/firebaseAdmin'; 
+import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin'; 
 import { Timestamp } from 'firebase-admin/firestore';
 
 export async function POST(req: NextRequest) {
@@ -8,6 +11,10 @@ export async function POST(req: NextRequest) {
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
         
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         // Allow both admins and creators to create video entries
@@ -34,9 +41,9 @@ export async function POST(req: NextRequest) {
             description,
             category,
             videoUrl,
-            thumbnailUrl, // <-- New
-            tags: normalizedTags, // <-- New
-            visibility,   // <-- New
+            thumbnailUrl,
+            tags: normalizedTags,
+            visibility,
             authorId: decodedToken.uid,
             authorName: decodedToken.name || 'Anonymous',
             authorPhotoURL: decodedToken.picture || null,
@@ -54,4 +61,3 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
-

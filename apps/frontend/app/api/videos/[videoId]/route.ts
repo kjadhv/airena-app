@@ -1,14 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db, authAdmin } from '@/app/firebase/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
-
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getDb, getAuthAdmin } from '@/app/firebase/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 type RouteContext = {
   params: Promise<{
     videoId: string;
   }>;
 };
+
 // --- UPDATE a specific video (PUT) ---
 export async function PUT(
     req: NextRequest,
@@ -20,6 +22,10 @@ export async function PUT(
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
 
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         const { title, description, category, tags, visibility, thumbnailUrl } = await req.json();
@@ -74,6 +80,10 @@ export async function DELETE(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
+        
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         const videoRef = db.collection('videos').doc(videoId);
         const videoDoc = await videoRef.get();
@@ -103,6 +113,11 @@ export async function POST(
 ) {
     try {
         const { videoId } = await context.params;
+        
+        // Get Firebase instances
+        const authAdmin = getAuthAdmin();
+        const db = getDb();
+        
         const videoRef = db.collection('videos').doc(videoId);
 
         // ✅ Check if the video document exists right at the beginning

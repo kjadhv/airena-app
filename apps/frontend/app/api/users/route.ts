@@ -1,6 +1,8 @@
-// app/api/users/route.ts
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { authAdmin } from '@/app/firebase/firebaseAdmin';
+import { getAuthAdmin } from '@/app/firebase/firebaseAdmin';
 
 export async function GET(req: NextRequest) {
     try {
@@ -8,6 +10,9 @@ export async function GET(req: NextRequest) {
         if (!idToken) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        
+        // Get Firebase instance
+        const authAdmin = getAuthAdmin();
         
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         // CRITICAL: Only allow superAdmins to access this list
