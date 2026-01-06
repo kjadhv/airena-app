@@ -7,6 +7,11 @@ import crypto from "crypto";
 const FFMPEG_PATH = "C:\\ffmpeg\\ffmpeg.exe";
 
 export async function POST(req: NextRequest) {
+  console.log("ENV CHECK (runtime)", {
+    projectId: !!process.env.FIREBASE_PROJECT_ID,
+    email: !!process.env.FIREBASE_CLIENT_EMAIL,
+    key: !!process.env.FIREBASE_PRIVATE_KEY,
+  });
   try {
     const { videoUrl, start, end } = await req.json();
 
@@ -66,3 +71,4 @@ await new Promise<void>((resolve, reject) => {
     return new Response("Clip failed", { status: 500 });
   }
 }
+
