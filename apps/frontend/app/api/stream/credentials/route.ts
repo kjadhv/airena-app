@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from "firebase-admin/auth";
@@ -5,28 +8,33 @@ import { getAuth } from "firebase-admin/auth";
 // Firebase Admin initialization
 if (!getApps().length) {
   try {
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    let parsedKey;
     
-    if (!serviceAccountKey) {
-      console.error("Firebase service account key is not set!");
+    // Try base64 first (more reliable for Vercel)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64) {
+      const decoded = Buffer.from(
+        process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64, 
+        'base64'
+      ).toString('utf8');
+      parsedKey = JSON.parse(decoded);
+    } 
+    // Fallback to JSON string
+    else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      let cleanedKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+      
+      // Remove quotes if present
+      if ((cleanedKey.startsWith('"') && cleanedKey.endsWith('"')) ||
+          (cleanedKey.startsWith("'") && cleanedKey.endsWith("'"))) {
+        cleanedKey = cleanedKey.slice(1, -1);
+      }
+      
+      // Handle escaped newlines
+      cleanedKey = cleanedKey.replace(/\\\\n/g, '\\n').replace(/\\n/g, '\n');
+      
+      parsedKey = JSON.parse(cleanedKey);
+    } else {
       throw new Error("Firebase service account key is missing");
     }
-    
-    let cleanedKey = serviceAccountKey.trim();
-    
-    // Remove surrounding quotes if present
-    if ((cleanedKey.startsWith('"') && cleanedKey.endsWith('"')) ||
-        (cleanedKey.startsWith("'") && cleanedKey.endsWith("'"))) {
-      cleanedKey = cleanedKey.slice(1, -1);
-    }
-    
-    // Handle double-escaped newlines
-    cleanedKey = cleanedKey.replace(/\\\\n/g, '\\n');
-    
-    // Replace escaped newlines with actual newlines
-    cleanedKey = cleanedKey.replace(/\\n/g, '\n');
-    
-    const parsedKey = JSON.parse(cleanedKey);
     
     initializeApp({
       credential: cert(parsedKey),
@@ -34,10 +42,6 @@ if (!getApps().length) {
     console.log("Firebase Admin initialized successfully");
   } catch (error: unknown) {
     console.error("Firebase Admin initialization error:", error);
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      console.error("Service account key format issue. First 100 chars:", 
-        process.env.FIREBASE_SERVICE_ACCOUNT_KEY.substring(0, 100));
-    }
     throw error;
   }
 }
@@ -60,7 +64,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
     
-    const urlWithQuery = ${backendUrl}/stream/credentials?userId=${encodeURIComponent(userId)};
+    const urlWithQuery = `${backendUrl}/stream/credentials?userId=${encodeURIComponent(userId)}`;
     
     const response = await fetch(urlWithQuery, {
       method: 'GET',
@@ -84,7 +88,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
       }
       
-      const playbackUrl = ${hlsBaseUrl}/live/${data.streamKey}/index.m3u8;
+      const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
 
       return NextResponse.json({
         ...data,
@@ -136,14 +140,14 @@ export async function POST(request: NextRequest) {
     formData.append('email', userRecord.email || '');
     formData.append('displayName', userRecord.displayName || userRecord.email?.split('@')[0] || 'User');
 
-    const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    const backendUrlPost = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
-    if (!backendUrl) {
+    if (!backendUrlPost) {
       console.error("Backend URL not configured");
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
     
-    const backendEndpoint = ${backendUrl}/stream/credentials;
+    const backendEndpoint = `${backendUrlPost}/stream/credentials`;
     
     const response = await fetch(backendEndpoint, {
       method: 'POST',
@@ -164,14 +168,14 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
     
-    const hlsBaseUrl = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    const hlsBaseUrlPost = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
-    if (!hlsBaseUrl) {
+    if (!hlsBaseUrlPost) {
       console.error("HLS_BASE_URL not set!");
       return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
     }
     
-    const playbackUrl = ${hlsBaseUrl}/live/${data.streamKey}/index.m3u8;
+    const playbackUrl = `${hlsBaseUrlPost}/live/${data.streamKey}/index.m3u8`;
 
     return NextResponse.json({
       ...data,
