@@ -1,6 +1,3 @@
-export const dynamic = "force-dynamic";
-export const runtime = 'nodejs';
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from "firebase-admin/auth";
@@ -8,56 +5,60 @@ import { getAuth } from "firebase-admin/auth";
 // Firebase Admin initialization
 if (!getApps().length) {
   try {
-    let parsedKey;
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
-    // Try base64 first (more reliable for Vercel)
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64) {
-      const decoded = Buffer.from(
-        process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64, 
-        'base64'
-      ).toString('utf8');
-      parsedKey = JSON.parse(decoded);
-    } 
-    // Fallback to JSON string
-    else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      let cleanedKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
-      
-      // Remove quotes if present
-      if ((cleanedKey.startsWith('"') && cleanedKey.endsWith('"')) ||
-          (cleanedKey.startsWith("'") && cleanedKey.endsWith("'"))) {
-        cleanedKey = cleanedKey.slice(1, -1);
-      }
-      
-      // Handle escaped newlines
-      cleanedKey = cleanedKey.replace(/\\\\n/g, '\\n').replace(/\\n/g, '\n');
-      
-      parsedKey = JSON.parse(cleanedKey);
-    } else {
+    if (!serviceAccountKey) {
+      console.error("Firebase service account key is not set!");
       throw new Error("Firebase service account key is missing");
     }
+    
+    // Trim and remove potential outer quotes
+    let cleanedKey = serviceAccountKey.trim();
+    
+    // Remove surrounding quotes if present
+    if ((cleanedKey.startsWith('"') && cleanedKey.endsWith('"')) ||
+        (cleanedKey.startsWith("'") && cleanedKey.endsWith("'"))) {
+      cleanedKey = cleanedKey.slice(1, -1);
+    }
+    
+    // Replace escaped newlines with actual newlines
+    cleanedKey = cleanedKey.replace(/\\n/g, '\n');
+    
+    const parsedKey = JSON.parse(cleanedKey);
     
     initializeApp({
       credential: cert(parsedKey),
     });
-    console.log("Firebase Admin initialized successfully");
+    console.log("Firebase Admin initialized in credentials route");
   } catch (error: unknown) {
-    console.error("Firebase Admin initialization error:", error);
+    console.error("Firebase Admin initialization error", error);
+    console.error("Service account key format issue. First 50 chars:", 
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.substring(0, 50));
     throw error;
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('GET /api/stream/credentials - Start');
+    
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('No auth header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
     const token = authHeader.split(' ')[1];
+    console.log('Verifying token...');
+    
     const decodedToken = await getAuth().verifyIdToken(token);
     const userId = decodedToken.uid;
+    
+    console.log('Token verified for user:', userId);
 
     const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    console.log('Backend URL:', backendUrl);
     
     if (!backendUrl) {
       console.error("Backend URL not configured");
@@ -65,6 +66,8 @@ export async function GET(request: NextRequest) {
     }
     
     const urlWithQuery = `${backendUrl}/stream/credentials?userId=${encodeURIComponent(userId)}`;
+    
+    console.log('Calling backend:', urlWithQuery);
     
     const response = await fetch(urlWithQuery, {
       method: 'GET',
@@ -74,10 +77,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    console.log('Backend response:', response.status);
+
     if (response.ok) {
       const data = await response.json();
       
       if (data.exists === false) {
+        console.log('No existing credentials');
         return NextResponse.json({ exists: false }, { status: 200 });
       }
       
@@ -90,6 +96,8 @@ export async function GET(request: NextRequest) {
       
       const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
 
+      console.log('Returning credentials');
+      
       return NextResponse.json({
         ...data,
         playbackUrl,
@@ -97,6 +105,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (response.status === 404) {
+      console.log('404 from backend');
       return NextResponse.json({ exists: false }, { status: 200 });
     }
 
@@ -108,10 +117,9 @@ export async function GET(request: NextRequest) {
     );
 
   } catch (error: unknown) {
-    console.error('API GET error:', error);
+    console.error('API proxy GET error:', error);
     
-    if (typeof error === 'object' && error !== null && 'code' in error && 
-        (error as {code: unknown}).code === 'auth/id-token-expired') {
+    if (typeof error === 'object' && error !== null && 'code' in error && (error as {code: unknown}).code === 'auth/id-token-expired') {
       return NextResponse.json({ error: 'Token expired' }, { status: 401 });
     }
     
@@ -124,30 +132,44 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('POST /api/stream/credentials - Start');
+    
     const authHeader = request.headers.get('Authorization');
     if (!authHeader) {
+      console.error('No auth header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const token = authHeader.split(' ')[1];
+    console.log('Verifying token...');
+    
     const decodedToken = await getAuth().verifyIdToken(token);
     const userId = decodedToken.uid;
     
+    console.log('Token verified for user:', userId);
+    
     const userRecord = await getAuth().getUser(userId);
+    
+    console.log('User:', userRecord.email);
 
     const formData = await request.formData();
+    
     formData.append('userId', userId);
     formData.append('email', userRecord.email || '');
     formData.append('displayName', userRecord.displayName || userRecord.email?.split('@')[0] || 'User');
 
-    const backendUrlPost = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    const backendUrl = process.env.NESTJS_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
-    if (!backendUrlPost) {
+    console.log('Backend URL:', backendUrl);
+    
+    if (!backendUrl) {
       console.error("Backend URL not configured");
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
     
-    const backendEndpoint = `${backendUrlPost}/stream/credentials`;
+    const backendEndpoint = `${backendUrl}/stream/credentials`;
+    
+    console.log('Calling backend:', backendEndpoint);
     
     const response = await fetch(backendEndpoint, {
       method: 'POST',
@@ -156,6 +178,8 @@ export async function POST(request: NextRequest) {
       },
       body: formData,
     });
+
+    console.log('Backend response:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -168,14 +192,16 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
     
-    const hlsBaseUrlPost = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    const hlsBaseUrl = process.env.HLS_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     
-    if (!hlsBaseUrlPost) {
+    if (!hlsBaseUrl) {
       console.error("HLS_BASE_URL not set!");
       return NextResponse.json({ error: 'HLS URL not configured' }, { status: 500 });
     }
     
-    const playbackUrl = `${hlsBaseUrlPost}/live/${data.streamKey}/index.m3u8`;
+    const playbackUrl = `${hlsBaseUrl}/live/${data.streamKey}/index.m3u8`;
+
+    console.log('Credentials created');
 
     return NextResponse.json({
       ...data,
@@ -183,7 +209,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('API POST error:', error);
+    console.error('API proxy POST error:', error);
     return NextResponse.json(
       { 
         error: 'Internal server error',
